@@ -43,6 +43,13 @@ describe('rpc parameter names', () => {
     ])
   })
 
+  it('dev_add_dummy_players sends p_room_id and p_count', async () => {
+    await api.devAddDummyPlayers('room-1', 3)
+    expect(rpcCalls).toEqual([
+      { name: 'dev_add_dummy_players', params: { p_room_id: 'room-1', p_count: 3 } },
+    ])
+  })
+
   it('join_room sends p_code and p_nickname', async () => {
     await api.joinRoom('ABC123', 'Fox')
     expect(rpcCalls).toEqual([

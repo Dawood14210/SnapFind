@@ -13,6 +13,7 @@ import { ApiError, rpcErrorToApi } from './errors'
 import type {
   AdvanceRoundResult,
   CreateRoomResult,
+  DevAddDummyPlayersResult,
   EndRoundResult,
   JoinRoomResult,
   KickPlayerResult,
@@ -46,6 +47,10 @@ export const setRoomSettings = (
     p_duration_min: durationMin,
     p_max_players: maxPlayers,
   })
+
+// Dev tool: dummy players for testing
+export const devAddDummyPlayers = (roomId: string, count: number) =>
+  rpc<DevAddDummyPlayersResult>('dev_add_dummy_players', { p_room_id: roomId, p_count: count })
 
 // Phase 1 — lobby
 export const createRoom = (nickname: string) =>
