@@ -284,7 +284,7 @@ All RPCs are Postgres functions called via `supabase.rpc('name', params)`.
   random ready player.
 - **Response:** `{ "ok": true, "room": RoomView, "finder_id": string }`
 - **Errors:** `NOT_HOST`, `NO_PLAY_AREA`, `NOT_ALL_READY`, `MIN_PLAYERS` (< 4),
-  `ROUND_ACTIVE`.
+  `ROUND_ACTIVE`, `FINDER_NOT_IN_ROOM`.
 - **Notes:** requires a play area, all players ready, ≥ `MIN_PLAYERS`. Sets status
   `hiding`, `started_at = now()`, assigns roles, writes event `round_started`.
 
@@ -300,7 +300,7 @@ All RPCs are Postgres functions called via `supabase.rpc('name', params)`.
 - **Caller:** any authenticated member (client polls; idempotent).
 - **Request:** `{ "room_id": string }`
 - **Response:** `{ "room": RoomView, "round": RoundState }`
-- **Errors:** `ROOM_NOT_FOUND`.
+- **Errors:** `ROOM_NOT_FOUND`, `NOT_IN_ROOM`.
 - **Notes:** transitions `hiding → hunting` at 3:00 of round time and
   `hunting → ended` at 30:00 (writes event `round_phase_changed` /
   `round_ended`). Safe to call repeatedly; also a no-op while `paused`.
@@ -555,7 +555,13 @@ proximity bands, `SPEED_LIMIT_M_PER_S`, `OUT_OF_BOUNDS_*`, `LAST_KNOWN_*`,
 - `phase`: `lobby` before `started_at`, `hiding` for `< HIDE_DURATION_SEC`,
   `hunting` for `< ROUND_DURATION_SEC`, else `ended`. `paused` overrides while the
   room is paused.
-- `window = clamp(floor(round_seconds / SNAPSHOT_WINDOW_SEC), 0, SNAPSHOT_WINDOW_COUNT)`.
+- `seconds_left_in_phase`: hide time left while `hiding` (or `paused` inside the
+  hide phase), hunt time left while `hunting` (or `paused` inside the hunt
+  phase), 0 otherwise.
+- `window = clamp(floor(round_seconds / SNAPSHOT_WINDOW_SEC), 0, SNAPSHOT_WINDOW_COUNT)`
+  for `hiding`/`hunting`/`paused`; 0 otherwise.
+- **Parity:** the `round` object returned by the `advance_round` RPC has exactly
+  these fields and semantics — the frontend may use either source.
 
 `getCharges(room: RoomView, serverNowMs: number, spent: number): number` (Phase 6)
 
@@ -586,7 +592,7 @@ proximity bands, `SPEED_LIMIT_M_PER_S`, `OUT_OF_BOUNDS_*`, `LAST_KNOWN_*`,
 |-------|-------|--------|
 | 0 | layout, constants, this contract, setup docs | done (merged) |
 | 1 | rooms/players/events tables + RLS; create_room, join_room, leave_room, kick_player, set_ready | landed (PR #2) |
-| 2 | set_play_area, start_round, server_now, advance_round, pause_round, resume_round, end_round; getRoundState | planned |
+| 2 | set_play_area, start_round, server_now, advance_round, pause_round, resume_round, end_round; getRoundState | landed (PR #3) |
 | 3 | locations, reveals + RLS; round_status | planned |
 | 4 | snapshots + RLS; submit_snapshot, snapshot_urls, resolve_window | planned |
 | 5 | tasks + RLS; task_progress, skip_task | planned |
