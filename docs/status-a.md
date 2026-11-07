@@ -4,7 +4,7 @@
 |-------|--------|
 | 0 — layout, shared constants, API contract, setup docs | ready for integration |
 | 1 — lobby (rooms/players/events + RLS + RPCs) | ready for integration |
-| 2 — play area, start, clock (RPCs + getRoundState) | not started |
+| 2 — play area, start, clock (RPCs + getRoundState) | ready for integration |
 | 3 — location (locations/reveals + round_status) | not started |
 | 4 — snapshots (submit/resolve/urls) | not started |
 | 5 — tasks (task_progress/skip_task) | not started |
