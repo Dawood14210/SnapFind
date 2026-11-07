@@ -13,6 +13,14 @@ const MESSAGES: Record<string, string> = {
   CANNOT_KICK_HOST: 'The host cannot be kicked.',
   PLAYER_NOT_FOUND: 'That player is not in the room.',
   ROUND_ACTIVE: 'The round already started.',
+  NO_PLAY_AREA: 'Set a play area before starting the round.',
+  NOT_ALL_READY: 'Waiting for all players to be ready.',
+  MIN_PLAYERS: 'Need at least 4 players to start.',
+  NOT_ACTIVE: 'The round is not active.',
+  NOT_PAUSED: 'The round is not paused.',
+  INVALID_RADIUS: 'Play area radius must be 100–600 m.',
+  INVALID_COORDS: 'Invalid map coordinates.',
+  FINDER_NOT_IN_ROOM: 'That player is not in the room.',
 }
 
 export function friendlyError(err: unknown): string {

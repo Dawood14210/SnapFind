@@ -18,6 +18,33 @@ describe('friendlyError', () => {
     )
   })
 
+  it('maps the phase 2 codes', () => {
+    expect(friendlyError(new ApiError('NO_PLAY_AREA', 'NO_PLAY_AREA', 422))).toBe(
+      'Set a play area before starting the round.',
+    )
+    expect(friendlyError(new ApiError('NOT_ALL_READY', 'NOT_ALL_READY', 422))).toBe(
+      'Waiting for all players to be ready.',
+    )
+    expect(friendlyError(new ApiError('MIN_PLAYERS', 'MIN_PLAYERS', 422))).toBe(
+      'Need at least 4 players to start.',
+    )
+    expect(friendlyError(new ApiError('NOT_HOST', 'NOT_HOST', 403))).toBe(
+      'Only the host can do that.',
+    )
+    expect(friendlyError(new ApiError('NOT_ACTIVE', 'NOT_ACTIVE', 422))).toBe(
+      'The round is not active.',
+    )
+    expect(friendlyError(new ApiError('NOT_PAUSED', 'NOT_PAUSED', 422))).toBe(
+      'The round is not paused.',
+    )
+    expect(friendlyError(new ApiError('INVALID_RADIUS', 'INVALID_RADIUS', 400))).toBe(
+      'Play area radius must be 100–600 m.',
+    )
+    expect(friendlyError(new ApiError('INVALID_COORDS', 'INVALID_COORDS', 400))).toBe(
+      'Invalid map coordinates.',
+    )
+  })
+
   it('falls back to the raw message for unknown codes', () => {
     expect(friendlyError(new ApiError('SOMETHING_NEW', 'SOMETHING_NEW', 400))).toBe(
       'SOMETHING_NEW',

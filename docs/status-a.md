@@ -6,7 +6,7 @@
 |------|--------|
 | 0-F frontend setup | ready for integration |
 | 1-F lobby frontend | ready for integration |
-| 2-F play area / roles / clock frontend | not started |
+| 2-F play area / roles / clock frontend | done |
 | 3-B location backend | not started |
 | 3-F location frontend | not started |
 | 4-B snapshots backend | not started |
