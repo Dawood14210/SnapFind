@@ -15,6 +15,8 @@ function room(overrides: Partial<RoomView> = {}): RoomView {
     center_lng: 74.3,
     radius_m: 300,
     duration_min: 30,
+    hide_duration_min: 3,
+    max_players: 25,
     started_at: null,
     paused_at: null,
     paused_total_ms: 0,
@@ -176,5 +178,24 @@ describe('getRoundState', () => {
     expect(s.seconds_left_in_phase).toBe(80)
     expect(s.hunt_seconds).toBe(0)
     expect(s.window).toBe(0)
+  })
+
+  it('custom hide/round durations shift the boundaries', () => {
+    const base = {
+      started_at: new Date(T0).toISOString(),
+      hide_duration_min: 5,
+      duration_min: 20,
+    }
+    const r = room({ ...base, status: 'hiding' })
+    const atHideEnd = getRoundState(r, at(300))
+    expect(atHideEnd.seconds_left_in_phase).toBe(0)
+    expect(atHideEnd.seconds_left_in_round).toBe(900)
+
+    const hunting = getRoundState(room({ ...base, status: 'hunting' }), at(400))
+    expect(hunting.hunt_seconds).toBe(100)
+    expect(hunting.seconds_left_in_phase).toBe(800)
+
+    const ended = getRoundState(room({ ...base, status: 'ended' }), at(1200))
+    expect(ended.seconds_left_in_round).toBe(0)
   })
 })

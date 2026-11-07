@@ -28,6 +28,21 @@ describe('rpc parameter names', () => {
     expect(rpcCalls).toEqual([{ name: 'create_room', params: { p_nickname: 'Fox' } }])
   })
 
+  it('set_room_settings sends the p_ settings', async () => {
+    await api.setRoomSettings('room-1', 5, 20, 10)
+    expect(rpcCalls).toEqual([
+      {
+        name: 'set_room_settings',
+        params: {
+          p_room_id: 'room-1',
+          p_hide_duration_min: 5,
+          p_duration_min: 20,
+          p_max_players: 10,
+        },
+      },
+    ])
+  })
+
   it('join_room sends p_code and p_nickname', async () => {
     await api.joinRoom('ABC123', 'Fox')
     expect(rpcCalls).toEqual([

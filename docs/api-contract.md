@@ -37,7 +37,7 @@
 All Edge Functions and RPCs return this envelope on failure:
 
 ```json
-{ "error": { "code": "ROOM_FULL", "message": "Room is full (25 players)" } }
+{ "error": { "code": "ROOM_FULL", "message": "Room is full." } }
 ```
 
 HTTP status: `400` invalid input, `401` unauthenticated, `403` forbidden (not allowed),
@@ -72,6 +72,8 @@ These shapes are returned by every endpoint that includes them.
   "center_lng": 74.3587,
   "radius_m": 300,
   "duration_min": 30,
+  "hide_duration_min": 3,
+  "max_players": 25,
   "started_at": "2026-11-07T18:00:00.000Z",
   "paused_at": null,
   "paused_total_ms": 0,
@@ -83,6 +85,8 @@ These shapes are returned by every endpoint that includes them.
 - `code` is 6 uppercase letters from `CODE_ALPHABET` (no O, I, L).
 - `started_at` is null in `lobby`; `finder_id` is null until `start_round`.
 - `paused_at` is null unless status is `paused`.
+- `duration_min` / `hide_duration_min` / `max_players` are the host-editable
+  round settings (defaults 30 / 3 / 25, see `set_room_settings`).
 
 ### PlayerView
 
@@ -257,8 +261,8 @@ signatures stay plain; only the argument objects sent to the server use the
 - **Caller:** authenticated player not already in an active room.
 - **Request:** `{ "p_code": string, "p_nickname": string }` — code is 6 uppercase letters.
 - **Response:** `{ "room": RoomView, "player": PlayerView }`
-- **Errors:** `ROOM_NOT_FOUND`, `ROOM_NOT_LOBBY`, `ROOM_FULL`, `NICKNAME_DUPLICATE`,
-  `NICKNAME_INVALID`, `ALREADY_IN_ROOM`.
+- **Errors:** `ROOM_NOT_FOUND`, `ROOM_NOT_LOBBY`, `ROOM_FULL` (room at
+  `max_players`), `NICKNAME_DUPLICATE`, `NICKNAME_INVALID`, `ALREADY_IN_ROOM`.
 - **Notes:** nickname unique per room (trimmed, case-insensitive). Room must be in
   `lobby`. Max 25 players. Implicitly leaves any previous ended-room membership
   (one membership per player). Response is jsonb with exactly the keys `room`
@@ -287,6 +291,20 @@ signatures stay plain; only the argument objects sent to the server use the
 - **Response:** `{ "ready": boolean }`
 - **Errors:** `NOT_IN_ROOM`, `ROUND_ACTIVE`.
 
+### set_room_settings — room settings
+
+- **Caller:** host, lobby only.
+- **Request:** `{ "p_room_id": string, "p_hide_duration_min": number,
+  "p_duration_min": number, "p_max_players": number }`
+- **Response:** `{ "ok": true, "room": RoomView }`
+- **Errors:** `NOT_HOST`, `ROUND_ACTIVE`, `INVALID_HIDE_DURATION` (1–15 min),
+  `INVALID_ROUND_DURATION` (5–60 min, must be greater than the hide time),
+  `INVALID_PLAYER_LIMIT` (4–25).
+- **Notes:** edits the per-room round settings. The clock then uses them:
+  `join_room` refuses when the room is at `max_players`; `advance_round`
+  transitions at `hide_duration_min` and `duration_min`; `getRoundState`
+  (shared) reads the same fields. Defaults: hide 3, round 30, max 25.
+
 ### set_play_area — Phase 2
 
 - **Caller:** host, lobby only.
@@ -302,8 +320,10 @@ signatures stay plain; only the argument objects sent to the server use the
 - **Response:** `{ "ok": true, "room": RoomView, "finder_id": string }`
 - **Errors:** `NOT_HOST`, `NO_PLAY_AREA`, `NOT_ALL_READY`, `MIN_PLAYERS` (< 4),
   `ROUND_ACTIVE`, `FINDER_NOT_IN_ROOM`.
-- **Notes:** requires a play area, all players ready, ≥ `MIN_PLAYERS`. Sets status
-  `hiding`, `started_at = now()`, assigns roles, writes event `round_started`.
+- **Notes:** requires a play area, all players ready, ≥ `MIN_PLAYERS` (4). Sets
+  status `hiding`, `started_at = now()`, assigns roles, writes event
+  `round_started`. The clock uses the room's `hide_duration_min` and
+  `duration_min` from then on.
 
 ### server_now — Phase 2
 
@@ -318,8 +338,8 @@ signatures stay plain; only the argument objects sent to the server use the
 - **Request:** `{ "p_room_id": string }`
 - **Response:** `{ "room": RoomView, "round": RoundState }`
 - **Errors:** `ROOM_NOT_FOUND`, `NOT_IN_ROOM`.
-- **Notes:** transitions `hiding → hunting` at 3:00 of round time and
-  `hunting → ended` at 30:00 (writes event `round_phase_changed` /
+- **Notes:** transitions `hiding → hunting` at the room's `hide_duration_min`
+  and `hunting → ended` at `duration_min` (writes event `round_phase_changed` /
   `round_ended`). Safe to call repeatedly; also a no-op while `paused`.
 
 ### pause_round — Phase 2
@@ -611,6 +631,7 @@ proximity bands, `SPEED_LIMIT_M_PER_S`, `OUT_OF_BOUNDS_*`, `LAST_KNOWN_*`,
 | 0 | layout, constants, this contract, setup docs | done (merged) |
 | 1 | rooms/players/events tables + RLS; create_room, join_room, leave_room, kick_player, set_ready | landed (PR #2) |
 | 2 | set_play_area, start_round, server_now, advance_round, pause_round, resume_round, end_round; getRoundState | landed (PR #3) |
+| settings | rooms.hide_duration_min / max_players; set_room_settings; clock uses per-room settings | landed (this PR) |
 | 3 | locations, reveals + RLS; round_status | planned |
 | 4 | snapshots + RLS; submit_snapshot, snapshot_urls, resolve_window | planned |
 | 5 | tasks + RLS; task_progress, skip_task | planned |

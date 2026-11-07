@@ -21,6 +21,7 @@ import type {
   RematchResult,
   ResumeRoundResult,
   SetPlayAreaResult,
+  SetRoomSettingsResult,
   SetReadyResult,
   ServerNowResult,
   StartRoundResult,
@@ -31,6 +32,20 @@ async function rpc<T>(name: string, params?: Record<string, unknown>): Promise<T
   if (error) throw rpcErrorToApi(error)
   return data as T
 }
+
+// Room settings
+export const setRoomSettings = (
+  roomId: string,
+  hideDurationMin: number,
+  durationMin: number,
+  maxPlayers: number,
+) =>
+  rpc<SetRoomSettingsResult>('set_room_settings', {
+    p_room_id: roomId,
+    p_hide_duration_min: hideDurationMin,
+    p_duration_min: durationMin,
+    p_max_players: maxPlayers,
+  })
 
 // Phase 1 — lobby
 export const createRoom = (nickname: string) =>

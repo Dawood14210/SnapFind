@@ -10,9 +10,6 @@
  */
 
 import {
-  HIDE_DURATION_SEC,
-  HUNT_DURATION_SEC,
-  ROUND_DURATION_SEC,
   SNAPSHOT_WINDOW_COUNT,
   SNAPSHOT_WINDOW_SEC,
 } from './constants'
@@ -29,6 +26,8 @@ export interface RoomView {
   center_lng: number | null
   radius_m: number | null
   duration_min: number
+  hide_duration_min: number
+  max_players: number
   started_at: string | null
   paused_at: string | null
   paused_total_ms: number
@@ -61,11 +60,14 @@ function clamp(value: number, min: number, max: number): number {
  * Derive the round state from a rooms row and the current server time.
  *
  * Round time = (serverNowMs - started_at - paused_total_ms) / 1000, clamped to
- * [0, ROUND_DURATION_SEC]. While the room is paused the clock is frozen at
- * paused_at. The phase comes from the room status (advance_round performs the
- * actual transitions).
+ * [0, room.duration_min * 60]. The hide boundary is room.hide_duration_min * 60.
+ * While the room is paused the clock is frozen at paused_at. The phase comes
+ * from the room status (advance_round performs the actual transitions).
  */
 export function getRoundState(room: RoomView, serverNowMs: number): RoundState {
+  const hideSec = room.hide_duration_min * 60
+  const roundSec = room.duration_min * 60
+
   if (room.status === 'lobby' || room.started_at === null) {
     return {
       phase: 'lobby',
@@ -80,10 +82,10 @@ export function getRoundState(room: RoomView, serverNowMs: number): RoundState {
   if (room.status === 'ended') {
     return {
       phase: 'ended',
-      round_seconds: ROUND_DURATION_SEC,
+      round_seconds: roundSec,
       seconds_left_in_round: 0,
       seconds_left_in_phase: 0,
-      hunt_seconds: HUNT_DURATION_SEC,
+      hunt_seconds: roundSec - hideSec,
       window: 0,
     }
   }
@@ -94,18 +96,18 @@ export function getRoundState(room: RoomView, serverNowMs: number): RoundState {
   const roundSeconds = clamp(
     (effectiveNowMs - startedMs - room.paused_total_ms) / 1000,
     0,
-    ROUND_DURATION_SEC,
+    roundSec,
   )
 
-  const huntSeconds = Math.max(0, roundSeconds - HIDE_DURATION_SEC)
-  const secondsLeftInRound = Math.max(0, ROUND_DURATION_SEC - roundSeconds)
+  const huntSeconds = Math.max(0, roundSeconds - hideSec)
+  const secondsLeftInRound = Math.max(0, roundSec - roundSeconds)
 
   // While paused the clock is frozen, but the frozen hide/hunt state is still
   // reported so the UI can resume from the correct phase and window.
   let secondsLeftInPhase = 0
-  if (room.status === 'hiding' || (room.status === 'paused' && roundSeconds < HIDE_DURATION_SEC)) {
-    secondsLeftInPhase = Math.max(0, HIDE_DURATION_SEC - roundSeconds)
-  } else if (room.status === 'hunting' || (room.status === 'paused' && roundSeconds >= HIDE_DURATION_SEC)) {
+  if (room.status === 'hiding' || (room.status === 'paused' && roundSeconds < hideSec)) {
+    secondsLeftInPhase = Math.max(0, hideSec - roundSeconds)
+  } else if (room.status === 'hunting' || (room.status === 'paused' && roundSeconds >= hideSec)) {
     secondsLeftInPhase = secondsLeftInRound
   }
 

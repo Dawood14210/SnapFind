@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { kickPlayer, leaveRoom, setReady, startRound } from '@/api'
+import { kickPlayer, leaveRoom, setReady, setRoomSettings, startRound } from '@/api'
 import type { PlayerView } from '@/api'
 import { friendlyError } from '@/lib/friendlyError'
 import { useAuth } from '@/auth/AuthProvider'
@@ -15,10 +15,43 @@ export default function Lobby() {
   const [actionError, setActionError] = useState<string | null>(null)
   const [finderChoice, setFinderChoice] = useState('')
   const [starting, setStarting] = useState(false)
+  const [settings, setSettings] = useState({
+    hide: room?.hide_duration_min ?? 3,
+    round: room?.duration_min ?? 30,
+    players: room?.max_players ?? 25,
+  })
+  const [savingSettings, setSavingSettings] = useState(false)
 
   const me = players.find((p) => p.id === user?.id) ?? null
   const isHost = room?.host_id === user?.id
   const roundStarted = room !== null && room.status !== 'lobby'
+  const roundActive = room?.status === 'hiding' || room?.status === 'hunting' || room?.status === 'paused'
+  const roundEnded = room?.status === 'ended'
+
+  // Re-sync the settings inputs when the room's values change (e.g. after
+  // saving or after a Realtime update from another device).
+  useEffect(() => {
+    if (!room) return
+    setSettings({
+      hide: room.hide_duration_min,
+      round: room.duration_min,
+      players: room.max_players,
+    })
+  }, [room?.hide_duration_min, room?.duration_min, room?.max_players])
+
+  const handleSaveSettings = async () => {
+    if (!room) return
+    setSavingSettings(true)
+    setActionError(null)
+    try {
+      await setRoomSettings(room.id, settings.hide, settings.round, settings.players)
+      await reload()
+    } catch (err) {
+      setActionError(friendlyError(err))
+    } finally {
+      setSavingSettings(false)
+    }
+  }
 
   const handleCopy = async () => {
     if (!room) return
@@ -100,7 +133,7 @@ export default function Lobby() {
 
   return (
     <div className="min-h-screen flex flex-col gap-6 p-6 bg-slate-50 max-w-lg mx-auto">
-      {roundStarted && (
+      {roundActive && (
         <div className="flex flex-col items-stretch gap-3 rounded-xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
           <span>This round has started — spectating is available during the hunt.</span>
           <button
@@ -109,6 +142,12 @@ export default function Lobby() {
           >
             Go to the round
           </button>
+        </div>
+      )}
+
+      {roundEnded && (
+        <div className="rounded-xl bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">
+          The round has ended — leave below to start a new one.
         </div>
       )}
 
@@ -126,10 +165,76 @@ export default function Lobby() {
           </button>
         </div>
         <p className="mt-3 text-sm text-slate-500">
-          {players.length} of 25 players ·{' '}
+          {players.length} of {room.max_players} players ·{' '}
           {isHost ? 'You are the host' : 'Host: ' + players.find((p) => p.id === room.host_id)?.nickname}
         </p>
       </div>
+
+      {isHost && !roundStarted && (
+        <div className="bg-white rounded-2xl shadow p-4">
+          <p className="font-semibold text-slate-900">Round settings</p>
+          <p className="mt-1 text-sm text-slate-500">
+            Hide time, round time (minutes) and the player limit.
+          </p>
+
+          <div className="mt-3 flex flex-col gap-3">
+            <label className="flex items-center justify-between gap-3">
+              <span className="text-sm font-semibold text-slate-700">Hide time</span>
+              <input
+                type="number"
+                min={1}
+                max={15}
+                value={settings.hide}
+                onChange={(e) => setSettings((s) => ({ ...s, hide: Number(e.target.value) }))}
+                className="w-24 rounded-lg border border-slate-300 px-3 py-2 text-right font-semibold"
+              />
+            </label>
+            <label className="flex items-center justify-between gap-3">
+              <span className="text-sm font-semibold text-slate-700">Round time</span>
+              <input
+                type="number"
+                min={5}
+                max={60}
+                value={settings.round}
+                onChange={(e) => setSettings((s) => ({ ...s, round: Number(e.target.value) }))}
+                className="w-24 rounded-lg border border-slate-300 px-3 py-2 text-right font-semibold"
+              />
+            </label>
+            <label className="flex items-center justify-between gap-3">
+              <span className="text-sm font-semibold text-slate-700">Player limit</span>
+              <input
+                type="number"
+                min={4}
+                max={25}
+                value={settings.players}
+                onChange={(e) => setSettings((s) => ({ ...s, players: Number(e.target.value) }))}
+                className="w-24 rounded-lg border border-slate-300 px-3 py-2 text-right font-semibold"
+              />
+            </label>
+          </div>
+
+          <button
+            onClick={handleSaveSettings}
+            disabled={savingSettings}
+            className="mt-3 w-full rounded-xl bg-blue-600 py-3 text-base font-bold text-white shadow active:scale-95 disabled:opacity-50"
+          >
+            {savingSettings ? 'Saving…' : 'Save settings'}
+          </button>
+          {!(
+            settings.hide >= 1 &&
+            settings.hide <= 15 &&
+            settings.round >= 5 &&
+            settings.round <= 60 &&
+            settings.round > settings.hide &&
+            settings.players >= 4 &&
+            settings.players <= 25
+          ) && (
+            <p className="mt-2 text-sm text-amber-700">
+              Hide 1–15 min, round 5–60 min (longer than the hide time), 4–25 players.
+            </p>
+          )}
+        </div>
+      )}
 
       {isHost && !roundStarted && (
         <div className="bg-white rounded-2xl shadow p-4">

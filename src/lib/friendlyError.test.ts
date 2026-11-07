@@ -43,6 +43,15 @@ describe('friendlyError', () => {
     expect(friendlyError(new ApiError('INVALID_COORDS', 'INVALID_COORDS', 400))).toBe(
       'Invalid map coordinates.',
     )
+    expect(friendlyError(new ApiError('INVALID_HIDE_DURATION', 'INVALID_HIDE_DURATION', 400))).toBe(
+      'Hide time must be 1–15 minutes.',
+    )
+    expect(friendlyError(new ApiError('INVALID_ROUND_DURATION', 'INVALID_ROUND_DURATION', 400))).toBe(
+      'Round time must be 5–60 minutes and longer than the hide time.',
+    )
+    expect(friendlyError(new ApiError('INVALID_PLAYER_LIMIT', 'INVALID_PLAYER_LIMIT', 400))).toBe(
+      'Player limit must be 4–25.',
+    )
   })
 
   it('falls back to the raw message for unknown codes', () => {
