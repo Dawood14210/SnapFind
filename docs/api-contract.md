@@ -529,8 +529,9 @@ from the token. Request bodies are JSON. Responses are JSON.
 
 ### constants (Phase 0)
 
-File: `shared/constants.ts` (import as `@/shared/constants` or a relative path, per
-your Vite setup). Exports every game number: `MIN_PLAYERS`, `MAX_PLAYERS`,
+File: `shared/constants.ts` (import as `@shared/constants` — the Vite alias
+`@shared` maps to the `shared/` folder; never copy the file into `src/`).
+Exports every game number: `MIN_PLAYERS`, `MAX_PLAYERS`,
 `ROUND_DURATION_SEC`, `HIDE_DURATION_SEC`, `HUNT_DURATION_SEC`,
 `SNAPSHOT_WINDOW_SEC`, `SNAPSHOT_WINDOW_COUNT`, `SNAPSHOT_ON_TIME_TOLERANCE_SEC`,
 `SNAPSHOT_LATE_TOLERANCE_SEC`, `SNAPSHOT_ON_TIME_POINTS`, `TAG_DISTANCE_M`,

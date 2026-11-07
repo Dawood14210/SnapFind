@@ -1,4 +1,26 @@
-# Agent A — backend status
+# Snapfind — status
+
+## Steps
+
+| Step | Status |
+|------|--------|
+| 0-F frontend setup | ready for integration |
+| 1-F lobby frontend | not started |
+| 2-F play area / roles / clock frontend | not started |
+| 3-B location backend | not started |
+| 3-F location frontend | not started |
+| 4-B snapshots backend | not started |
+| 4-F snapshots frontend | not started |
+| 5-B tasks backend | not started |
+| 5-F tasks frontend | not started |
+| 6-B abilities backend | not started |
+| 6-F abilities frontend | not started |
+| 7-B tags / scores / rematch backend | not started |
+| 7-F tags / results frontend | not started |
+| 8-B safety and checks backend | not started |
+| 8-F safety and polish frontend | not started |
+
+## Phases
 
 | Phase | Status |
 |-------|--------|
