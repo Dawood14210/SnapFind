@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { kickPlayer, leaveRoom, setReady, setRoomSettings, startRound } from '@/api'
+import { devAddDummyPlayers, kickPlayer, leaveRoom, setReady, setRoomSettings, startRound } from '@/api'
 import type { PlayerView } from '@/api'
 import { friendlyError } from '@/lib/friendlyError'
 import { useAuth } from '@/auth/AuthProvider'
@@ -21,6 +21,8 @@ export default function Lobby() {
     players: room?.max_players ?? 25,
   })
   const [savingSettings, setSavingSettings] = useState(false)
+  const [dummyCount, setDummyCount] = useState(3)
+  const [dummyMessage, setDummyMessage] = useState<string | null>(null)
 
   const me = players.find((p) => p.id === user?.id) ?? null
   const isHost = room?.host_id === user?.id
@@ -50,6 +52,18 @@ export default function Lobby() {
       setActionError(friendlyError(err))
     } finally {
       setSavingSettings(false)
+    }
+  }
+
+  const handleAddDummyPlayers = async () => {
+    if (!room) return
+    setDummyMessage(null)
+    try {
+      const result = await devAddDummyPlayers(room.id, dummyCount)
+      await reload()
+      setDummyMessage(`Added ${result.added} dummy player${result.added === 1 ? '' : 's'}.`)
+    } catch (err) {
+      setDummyMessage(friendlyError(err))
     }
   }
 
@@ -232,6 +246,34 @@ export default function Lobby() {
             <p className="mt-2 text-sm text-amber-700">
               Hide 1–15 min, round 5–60 min (longer than the hide time), 4–25 players.
             </p>
+          )}
+        </div>
+      )}
+
+      {isHost && !roundStarted && (
+        <div className="bg-white rounded-2xl shadow p-4">
+          <p className="font-semibold text-slate-900">Dummy players</p>
+          <p className="mt-1 text-sm text-slate-500">
+            Add test players (ready) to try a round without enough phones.
+          </p>
+          <div className="mt-3 flex items-center gap-3">
+            <input
+              type="number"
+              min={1}
+              max={10}
+              value={dummyCount}
+              onChange={(e) => setDummyCount(Number(e.target.value))}
+              className="w-20 rounded-lg border border-slate-300 px-3 py-2 text-center font-semibold"
+            />
+            <button
+              onClick={handleAddDummyPlayers}
+              className="flex-1 rounded-xl bg-slate-800 py-3 text-base font-bold text-white shadow active:scale-95"
+            >
+              Add dummy players
+            </button>
+          </div>
+          {dummyMessage && (
+            <p className="mt-2 text-sm font-medium text-slate-600">{dummyMessage}</p>
           )}
         </div>
       )}

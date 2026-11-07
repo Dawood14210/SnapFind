@@ -305,6 +305,16 @@ signatures stay plain; only the argument objects sent to the server use the
   transitions at `hide_duration_min` and `duration_min`; `getRoundState`
   (shared) reads the same fields. Defaults: hide 3, round 30, max 25.
 
+### dev_add_dummy_players — dev tool
+
+- **Caller:** host, lobby only.
+- **Request:** `{ "p_room_id": string, "p_count": number }` — 1..10.
+- **Response:** `{ "ok": true, "added": number }`
+- **Errors:** `NOT_HOST`, `ROUND_ACTIVE`, `INVALID_COUNT`, `ROOM_FULL`.
+- **Notes:** adds ready dummy players (fresh `auth.users` + `players` rows with
+  unique nicknames) so rounds can be tested without enough real phones. The
+  host can remove them with the normal kick button.
+
 ### set_play_area — Phase 2
 
 - **Caller:** host, lobby only.
@@ -631,7 +641,8 @@ proximity bands, `SPEED_LIMIT_M_PER_S`, `OUT_OF_BOUNDS_*`, `LAST_KNOWN_*`,
 | 0 | layout, constants, this contract, setup docs | done (merged) |
 | 1 | rooms/players/events tables + RLS; create_room, join_room, leave_room, kick_player, set_ready | landed (PR #2) |
 | 2 | set_play_area, start_round, server_now, advance_round, pause_round, resume_round, end_round; getRoundState | landed (PR #3) |
-| settings | rooms.hide_duration_min / max_players; set_room_settings; clock uses per-room settings | landed (this PR) |
+| settings | rooms.hide_duration_min / max_players; set_room_settings; clock uses per-room settings | landed (PR #8) |
+| dev tools | dev_add_dummy_players (testing) | landed (this PR) |
 | 3 | locations, reveals + RLS; round_status | planned |
 | 4 | snapshots + RLS; submit_snapshot, snapshot_urls, resolve_window | planned |
 | 5 | tasks + RLS; task_progress, skip_task | planned |

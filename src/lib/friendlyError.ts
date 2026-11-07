@@ -24,6 +24,7 @@ const MESSAGES: Record<string, string> = {
   INVALID_HIDE_DURATION: 'Hide time must be 1–15 minutes.',
   INVALID_ROUND_DURATION: 'Round time must be 5–60 minutes and longer than the hide time.',
   INVALID_PLAYER_LIMIT: 'Player limit must be 4–25.',
+  INVALID_COUNT: 'Add between 1 and 10 dummy players.',
 }
 
 export function friendlyError(err: unknown): string {

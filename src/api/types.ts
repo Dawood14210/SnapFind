@@ -65,6 +65,15 @@ export interface SetRoomSettingsResult {
 }
 
 // ---------------------------------------------------------------------------
+// RPC: dev_add_dummy_players
+// ---------------------------------------------------------------------------
+
+export interface DevAddDummyPlayersResult {
+  ok: true
+  added: number
+}
+
+// ---------------------------------------------------------------------------
 // RPC: set_play_area / start_round / server_now / advance_round
 // ---------------------------------------------------------------------------
 
