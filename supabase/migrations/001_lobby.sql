@@ -6,9 +6,20 @@
 -- Run in the Supabase SQL Editor, in order, before Phase 2.
 --
 -- RPCs are SECURITY DEFINER: they run as the function owner and perform their
--- own permission checks in SQL. RLS still guards direct table access from
--- clients. RPC errors are raised as exceptions whose message is the contract
--- error code, e.g. raise exception 'ROOM_FULL' -> PostgREST message 'ROOM_FULL'.
+-- own permission checks in SQL.
+--
+-- RLS policy model (corrected form):
+--   * rooms, players and events are READ-ONLY for clients. Every policy is a
+--     select policy and uses the is_room_member() helper.
+--   * There are NO direct client write policies. Every write goes through an
+--     RPC (SECURITY DEFINER, which bypasses RLS) or server-side code with the
+--     service role key.
+--   * Realtime: enable Realtime for the rooms, players and events tables
+--     (Supabase default publication supabase_realtime). Changes respect RLS,
+--     so members receive live updates for their own room only.
+--
+-- RPC errors are raised as exceptions whose message is the contract error
+-- code, e.g. raise exception 'ROOM_FULL' -> PostgREST message 'ROOM_FULL'.
 --
 -- Naming rule: parameters are p_*, local variables are v_*, so PL/pgSQL
 -- variable substitution never collides with column names.
@@ -68,43 +79,38 @@ create index players_room_nickname_idx on players (room_id, nickname);
 create index events_room_created_idx on events (room_id, created_at desc);
 
 -- -----------------------------------------------------------------------------
--- Row Level Security
+-- Row Level Security — read-only policies only
 -- -----------------------------------------------------------------------------
 alter table rooms enable row level security;
 alter table players enable row level security;
 alter table events enable row level security;
 
--- rooms: members read; host updates/deletes
+-- Membership helper (SECURITY DEFINER): true when the caller's auth user id
+-- has a players row in the given room.
+create or replace function is_room_member(p_room_id uuid)
+returns boolean
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  return exists (
+    select 1 from players where id = auth.uid() and room_id = p_room_id
+  );
+end;
+$$;
+
+-- rooms: members read (no client write policies — writes go through RPCs)
 create policy "rooms_members_select" on rooms for select to authenticated
-  using (auth.uid() in (select room_id from players where room_id = rooms.id));
+  using (is_room_member(rooms.id));
 
-create policy "rooms_host_update" on rooms for update to authenticated
-  using (auth.uid() = rooms.host_id) with check (auth.uid() = rooms.host_id);
-
-create policy "rooms_host_delete" on rooms for delete to authenticated
-  using (auth.uid() = rooms.host_id);
-
--- players: members read; own row insert/update/delete; host deletes members
+-- players: members read (no client write policies — writes go through RPCs)
 create policy "players_members_select" on players for select to authenticated
-  using (auth.uid() in (select room_id from players p2 where p2.room_id = players.room_id));
+  using (is_room_member(players.room_id));
 
-create policy "players_own_insert" on players for insert to authenticated
-  with check (id = auth.uid());
-
-create policy "players_own_update" on players for update to authenticated
-  using (id = auth.uid()) with check (id = auth.uid());
-
-create policy "players_own_delete" on players for delete to authenticated
-  using (id = auth.uid());
-
-create policy "players_host_delete" on players for delete to authenticated
-  using (exists (
-    select 1 from rooms where rooms.id = players.room_id and rooms.host_id = auth.uid()
-  ));
-
--- events: members read; no client insert (server writes only)
+-- events: members read (no client write policies — server writes only)
 create policy "events_members_select" on events for select to authenticated
-  using (auth.uid() in (select room_id from players where room_id = events.room_id));
+  using (is_room_member(events.room_id));
 
 -- -----------------------------------------------------------------------------
 -- create_room: caller becomes host and a player

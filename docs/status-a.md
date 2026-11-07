@@ -5,7 +5,7 @@
 | Step | Status |
 |------|--------|
 | 0-F frontend setup | ready for integration |
-| 1-F lobby frontend | not started |
+| 1-F lobby frontend | ready for integration |
 | 2-F play area / roles / clock frontend | not started |
 | 3-B location backend | not started |
 | 3-F location frontend | not started |

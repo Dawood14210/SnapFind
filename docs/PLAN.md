@@ -20,7 +20,7 @@ two-phone test checklist and STOP.
 | Step | Status |
 |------|--------|
 | 0-F frontend setup | done (this PR) |
-| 1-F lobby frontend | not started |
+| 1-F lobby frontend | done (this PR) |
 | 2-F play area / roles / clock frontend | not started |
 | 3-B location backend | not started |
 | 3-F location frontend | not started |
