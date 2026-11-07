@@ -3,7 +3,7 @@
 | Phase | Status |
 |-------|--------|
 | 0 — layout, shared constants, API contract, setup docs | ready for integration |
-| 1 — lobby (rooms/players/events + RLS + RPCs) | not started |
+| 1 — lobby (rooms/players/events + RLS + RPCs) | ready for integration |
 | 2 — play area, start, clock (RPCs + getRoundState) | not started |
 | 3 — location (locations/reveals + round_status) | not started |
 | 4 — snapshots (submit/resolve/urls) | not started |

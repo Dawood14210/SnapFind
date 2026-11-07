@@ -16,6 +16,10 @@
 - Edge Functions: `Authorization: Bearer <access_token>` header. **The player is
   always taken from the token, never from the request body.**
 - Every game call carries `room_id` (except `create_room` and `server_now`).
+- **RPC security:** RPCs are Postgres `SECURITY DEFINER` functions that run as the
+  function owner and perform their own permission checks in SQL. RLS still guards
+  direct client table access. RPCs never trust client-provided player ids — the
+  player comes from `auth.uid()`.
 
 ### Time
 
@@ -39,7 +43,9 @@ HTTP status: `400` invalid input, `401` unauthenticated, `403` forbidden (not al
 `404` not found, `409` conflict, `422` business rule, `429` lockout, `500` server error.
 
 PostgREST RPC errors arrive as `{ "code", "detail", "message", "hint" }` — match on
-`code` or `message`.
+`code` or `message`. **For RPCs, the contract error code is carried in `message`**
+(e.g. `ROOM_FULL`); `code` is PostgREST's SQLSTATE (`P0001` for raised exceptions).
+For Edge Functions the contract code is in `error.code`.
 
 Success responses return the data object directly (no envelope).
 
@@ -227,7 +233,8 @@ All RPCs are Postgres functions called via `supabase.rpc('name', params)`.
 - **Response:** `{ "room": RoomView, "player": PlayerView, "host": true }`
 - **Errors:** `NICKNAME_INVALID`, `ALREADY_IN_ROOM`, `CODE_GENERATION_FAILED`.
 - **Notes:** generates a unique 6-letter code from `CODE_ALPHABET` (retries on
-  collision). Caller becomes host and a player.
+  collision). Caller becomes host and a player. Implicitly leaves any previous
+  ended-room membership (one membership per player).
 
 ### join_room — Phase 1
 
@@ -236,8 +243,9 @@ All RPCs are Postgres functions called via `supabase.rpc('name', params)`.
 - **Response:** `{ "room": RoomView, "player": PlayerView }`
 - **Errors:** `ROOM_NOT_FOUND`, `ROOM_NOT_LOBBY`, `ROOM_FULL`, `NICKNAME_DUPLICATE`,
   `NICKNAME_INVALID`, `ALREADY_IN_ROOM`.
-- **Notes:** nickname unique per room (trimmed, case-sensitive). Room must be in
-  `lobby`. Max 25 players.
+- **Notes:** nickname unique per room (trimmed, case-insensitive). Room must be in
+  `lobby`. Max 25 players. Implicitly leaves any previous ended-room membership
+  (one membership per player).
 
 ### leave_room — Phase 1
 
@@ -576,8 +584,8 @@ proximity bands, `SPEED_LIMIT_M_PER_S`, `OUT_OF_BOUNDS_*`, `LAST_KNOWN_*`,
 
 | Phase | Lands | Status |
 |-------|-------|--------|
-| 0 | layout, constants, this contract, setup docs | done (PR) |
-| 1 | rooms/players/events tables + RLS; create_room, join_room, leave_room, kick_player, set_ready | planned |
+| 0 | layout, constants, this contract, setup docs | done (merged) |
+| 1 | rooms/players/events tables + RLS; create_room, join_room, leave_room, kick_player, set_ready | landed (PR #2) |
 | 2 | set_play_area, start_round, server_now, advance_round, pause_round, resume_round, end_round; getRoundState | planned |
 | 3 | locations, reveals + RLS; round_status | planned |
 | 4 | snapshots + RLS; submit_snapshot, snapshot_urls, resolve_window | planned |
