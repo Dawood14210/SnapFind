@@ -15,7 +15,8 @@
   session; the session is attached automatically.
 - Edge Functions: `Authorization: Bearer <access_token>` header. **The player is
   always taken from the token, never from the request body.**
-- Every game call carries `room_id` (except `create_room` and `server_now`).
+- Every game call carries the room id — as `p_room_id` for RPCs (except
+  `create_room` and `server_now`) and as `room_id` in Edge Function bodies.
 - **RPC security:** RPCs are Postgres `SECURITY DEFINER` functions that run as the
   function owner and perform their own permission checks in SQL. RLS still guards
   direct client table access. RPCs never trust client-provided player ids — the
@@ -232,31 +233,41 @@ subscribes to `rooms` and `players` filtered by room for the lobby live list.
 All RPCs are Postgres functions called via `supabase.rpc('name', params)`.
 `params` must be an object (pass `{}` for no-argument RPCs).
 
+**Parameter names:** PostgREST matches RPC arguments **by name** against the
+SQL function parameter names, so every request key is the SQL parameter name
+with a `p_` prefix (`p_room_id`, `p_nickname`, `p_code`, `p_lat`, `p_lng`,
+`p_radius_m`, `p_finder_id`, `p_ready`, `p_player_id`). The frontend wrapper
+signatures stay plain; only the argument objects sent to the server use the
+`p_` names. Every RPC still to be built (Phase 7+: `rematch`) uses the same
+`p_` prefix and is listed below.
+
 ### create_room — Phase 1
 
 - **Caller:** any authenticated player (must not already be in an active room).
-- **Request:** `{ "nickname": string }` — 1..20 chars.
+- **Request:** `{ "p_nickname": string }` — 1..20 chars.
 - **Response:** `{ "room": RoomView, "player": PlayerView, "host": true }`
 - **Errors:** `NICKNAME_INVALID`, `ALREADY_IN_ROOM`, `CODE_GENERATION_FAILED`.
 - **Notes:** generates a unique 6-letter code from `CODE_ALPHABET` (retries on
   collision). Caller becomes host and a player. Implicitly leaves any previous
-  ended-room membership (one membership per player).
+  ended-room membership (one membership per player). Response is jsonb with
+  exactly the keys `room`, `player` and `host` (true).
 
 ### join_room — Phase 1
 
 - **Caller:** authenticated player not already in an active room.
-- **Request:** `{ "code": string, "nickname": string }` — code is 6 uppercase letters.
+- **Request:** `{ "p_code": string, "p_nickname": string }` — code is 6 uppercase letters.
 - **Response:** `{ "room": RoomView, "player": PlayerView }`
 - **Errors:** `ROOM_NOT_FOUND`, `ROOM_NOT_LOBBY`, `ROOM_FULL`, `NICKNAME_DUPLICATE`,
   `NICKNAME_INVALID`, `ALREADY_IN_ROOM`.
 - **Notes:** nickname unique per room (trimmed, case-insensitive). Room must be in
   `lobby`. Max 25 players. Implicitly leaves any previous ended-room membership
-  (one membership per player).
+  (one membership per player). Response is jsonb with exactly the keys `room`
+  and `player`.
 
 ### leave_room — Phase 1
 
 - **Caller:** player in the room.
-- **Request:** `{ "room_id": string }`
+- **Request:** `{ "p_room_id": string }`
 - **Response:** `{ "ok": true }`
 - **Errors:** `NOT_IN_ROOM`, `ROUND_ACTIVE` (lobby only).
 - **Notes:** host leaving hands the room to the earliest-joined player; if the last
@@ -265,29 +276,29 @@ All RPCs are Postgres functions called via `supabase.rpc('name', params)`.
 ### kick_player — Phase 1
 
 - **Caller:** host.
-- **Request:** `{ "room_id": string, "player_id": string }`
+- **Request:** `{ "p_room_id": string, "p_player_id": string }`
 - **Response:** `{ "ok": true }`
 - **Errors:** `NOT_HOST`, `PLAYER_NOT_FOUND`, `CANNOT_KICK_HOST`, `ROUND_ACTIVE`.
 
 ### set_ready — Phase 1
 
 - **Caller:** player in a lobby room.
-- **Request:** `{ "room_id": string, "ready": boolean }`
+- **Request:** `{ "p_room_id": string, "p_ready": boolean }`
 - **Response:** `{ "ready": boolean }`
 - **Errors:** `NOT_IN_ROOM`, `ROUND_ACTIVE`.
 
 ### set_play_area — Phase 2
 
 - **Caller:** host, lobby only.
-- **Request:** `{ "room_id": string, "center_lat": number, "center_lng": number, "radius_m": number }`
+- **Request:** `{ "p_room_id": string, "p_lat": number, "p_lng": number, "p_radius_m": number }`
 - **Response:** `{ "ok": true, "play_area": { "center_lat": number, "center_lng": number, "radius_m": number } }`
 - **Errors:** `NOT_HOST`, `INVALID_RADIUS` (100–600 m), `INVALID_COORDS` (lat ±90, lng ±180), `ROUND_ACTIVE`.
 
 ### start_round — Phase 2
 
 - **Caller:** host.
-- **Request:** `{ "room_id": string, "finder_id": string | null }` — `null` picks a
-  random ready player.
+- **Request:** `{ "p_room_id": string, "p_finder_id": string | null }` — `null`
+  picks a random ready player.
 - **Response:** `{ "ok": true, "room": RoomView, "finder_id": string }`
 - **Errors:** `NOT_HOST`, `NO_PLAY_AREA`, `NOT_ALL_READY`, `MIN_PLAYERS` (< 4),
   `ROUND_ACTIVE`, `FINDER_NOT_IN_ROOM`.
@@ -304,7 +315,7 @@ All RPCs are Postgres functions called via `supabase.rpc('name', params)`.
 ### advance_round — Phase 2
 
 - **Caller:** any authenticated member (client polls; idempotent).
-- **Request:** `{ "room_id": string }`
+- **Request:** `{ "p_room_id": string }`
 - **Response:** `{ "room": RoomView, "round": RoundState }`
 - **Errors:** `ROOM_NOT_FOUND`, `NOT_IN_ROOM`.
 - **Notes:** transitions `hiding → hunting` at 3:00 of round time and
@@ -314,7 +325,7 @@ All RPCs are Postgres functions called via `supabase.rpc('name', params)`.
 ### pause_round — Phase 2
 
 - **Caller:** host.
-- **Request:** `{ "room_id": string }`
+- **Request:** `{ "p_room_id": string }`
 - **Response:** `{ "ok": true, "paused_at": string }`
 - **Errors:** `NOT_HOST`, `NOT_ACTIVE` (must be `hiding` or `hunting`).
 - **Notes:** sets status `paused`, `paused_at = now()`.
@@ -322,7 +333,7 @@ All RPCs are Postgres functions called via `supabase.rpc('name', params)`.
 ### resume_round — Phase 2
 
 - **Caller:** host.
-- **Request:** `{ "room_id": string }`
+- **Request:** `{ "p_room_id": string }`
 - **Response:** `{ "ok": true, "paused_total_ms": number }`
 - **Errors:** `NOT_HOST`, `NOT_PAUSED`.
 - **Notes:** status returns to `hiding` or `hunting` based on round time at resume
@@ -331,7 +342,7 @@ All RPCs are Postgres functions called via `supabase.rpc('name', params)`.
 ### end_round — Phase 2
 
 - **Caller:** host.
-- **Request:** `{ "room_id": string }`
+- **Request:** `{ "p_room_id": string }`
 - **Response:** `{ "ok": true, "room": RoomView }`
 - **Errors:** `NOT_HOST`.
 - **Notes:** manual end (e.g. safety). Sets status `ended`. Scores are finalised by
@@ -340,7 +351,7 @@ All RPCs are Postgres functions called via `supabase.rpc('name', params)`.
 ### rematch — Phase 7
 
 - **Caller:** host, round must be `ended`.
-- **Request:** `{ "room_id": string }`
+- **Request:** `{ "p_room_id": string }`
 - **Response:** `{ "ok": true, "finder_id": string }`
 - **Errors:** `NOT_HOST`, `ROUND_NOT_ENDED`.
 - **Notes:** wipes round data (snapshots rows + stored files via `purge_photos`,
