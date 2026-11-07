@@ -47,5 +47,7 @@ imports them through the Vite alias `@shared` — it never copies them.
 
 ## Deployment
 
-Frontend deploys to Vercel (`npm run build`). See `docs/backend-setup.md` for
-the deploy steps for migrations and Edge Functions.
+Frontend deploys to Vercel (`npm run build`). `vercel.json` rewrites every path
+to `/index.html`, so client-side routes like `/rules` and `/room/:code` work
+without 404s. See `docs/backend-setup.md` for the deploy steps for migrations
+and Edge Functions.
