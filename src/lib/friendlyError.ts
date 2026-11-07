@@ -21,6 +21,9 @@ const MESSAGES: Record<string, string> = {
   INVALID_RADIUS: 'Play area radius must be 100–600 m.',
   INVALID_COORDS: 'Invalid map coordinates.',
   FINDER_NOT_IN_ROOM: 'That player is not in the room.',
+  INVALID_HIDE_DURATION: 'Hide time must be 1–15 minutes.',
+  INVALID_ROUND_DURATION: 'Round time must be 5–60 minutes and longer than the hide time.',
+  INVALID_PLAYER_LIMIT: 'Player limit must be 4–25.',
 }
 
 export function friendlyError(err: unknown): string {

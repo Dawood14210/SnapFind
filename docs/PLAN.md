@@ -22,6 +22,7 @@ two-phone test checklist and STOP.
 | 0-F frontend setup | done (this PR) |
 | 1-F lobby frontend | done (this PR) |
 | 2-F play area / roles / clock frontend | done |
+| settings host round settings (backend + frontend) | done (this PR) |
 | 3-B location backend | not started |
 | 3-F location frontend | not started |
 | 4-B snapshots backend | not started |
