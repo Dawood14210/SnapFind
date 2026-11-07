@@ -4,7 +4,7 @@
  * auth token, never from the request body.
  */
 
-import { supabase } from './client'
+import { getSupabase } from './client'
 import { edgeErrorToApi } from './errors'
 import type {
   ConfirmTagResult,
@@ -27,7 +27,7 @@ import type {
 } from './types'
 
 async function edge<T>(name: string, body: object): Promise<T> {
-  const { data, error } = await supabase.functions.invoke(name, {
+  const { data, error } = await getSupabase().functions.invoke(name, {
     body: body as Record<string, unknown>,
   })
   if (error) throw edgeErrorToApi(error)

@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { User } from '@supabase/supabase-js'
-import { supabase } from '@/api/client'
+import { getSupabase } from '@/api/client'
 
 interface AuthState {
   user: User | null
@@ -23,6 +23,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false
+    let supabase
+    try {
+      supabase = getSupabase()
+    } catch (err) {
+      setState({ user: null, loading: false, error: err instanceof Error ? err.message : String(err) })
+      return
+    }
 
     supabase.auth.getSession().then(({ data }) => {
       if (cancelled) return

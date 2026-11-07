@@ -197,9 +197,9 @@ migration.
 
 | Table | Phase | Purpose | RLS summary |
 |-------|-------|---------|-------------|
-| rooms | 1 | Room state, play area, round clock | members select; host update/delete |
-| players | 1 | Membership, nickname, role, points | members select; own row write |
-| events | 1 | Append-only game events | members select; service-key insert |
+| rooms | 1 | Room state, play area, round clock | members select (read-only); all writes via RPCs |
+| players | 1 | Membership, nickname, role, points | members select (read-only); all writes via RPCs |
+| events | 1 | Append-only game events | members select (read-only); server writes only |
 | locations | 3 | Per-player GPS readings | **own row only** (read+write); server logic via service key |
 | reveals | 3/4 | Finder-only location clues | **finder select only**; service-key write |
 | snapshots | 4 | Submitted photos | finder/tagged read all; hider own; own insert; service-key update/delete |
@@ -208,16 +208,22 @@ migration.
 | tags | 7 | Tag requests/resolutions | members select; service-key write |
 | sos_alerts | 8 | SOS alerts | **host select**; service-key insert |
 
-Detailed RLS per table (Phase 1):
+Detailed RLS per table (Phase 1, corrected form):
 
-- **rooms** — `select`: authenticated and member of the room
-  (`auth.uid() IN (SELECT id FROM players WHERE room_id = rooms.id)`);
-  `update`/`delete`: `auth.uid() = rooms.host_id`.
-- **players** — `select`: member of the room; `insert`/`update`/`delete`: own row
-  (`auth.uid() = players.id`) except host may `delete` members of their room.
-- **events** — `select`: member of the room; `insert`: service role only.
+- All policies are **read-only** and use the `is_room_member()` helper
+  (SECURITY DEFINER: true when `auth.uid()` has a players row in the room).
+- **rooms** — `select`: `is_room_member(rooms.id)`. No client write policies —
+  every write goes through an RPC.
+- **players** — `select`: `is_room_member(players.room_id)`. No client write
+  policies — every write goes through an RPC.
+- **events** — `select`: `is_room_member(events.room_id)`. No client write
+  policies — server writes only (RPCs / service key).
 
 The remaining policies are listed per table when their phase lands (Phase 3–8).
+
+Realtime: `rooms`, `players` and `events` are Realtime-enabled. Changes respect
+RLS, so members receive live updates for their own room only. The frontend
+subscribes to `rooms` and `players` filtered by room for the lobby live list.
 
 ---
 

@@ -3,7 +3,7 @@
  * Permission checks happen on the server; the wrappers only shape the calls.
  */
 
-import { supabase } from './client'
+import { getSupabase } from './client'
 import { ApiError, rpcErrorToApi } from './errors'
 import type {
   AdvanceRoundResult,
@@ -22,7 +22,7 @@ import type {
 } from './types'
 
 async function rpc<T>(name: string, params?: Record<string, unknown>): Promise<T> {
-  const { data, error } = await supabase.rpc(name, params ?? {})
+  const { data, error } = await getSupabase().rpc(name, params ?? {})
   if (error) throw rpcErrorToApi(error)
   return data as T
 }
