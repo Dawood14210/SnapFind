@@ -9,7 +9,8 @@
 | 2-F play area / roles / clock frontend | done |
 | settings host round settings (backend + frontend) | done |
 | dev tools dummy players (backend + frontend) | done |
-| 3-B location backend | not started |
+| 3-B location backend | done |
+| 3-F location frontend | not started |
 | 3-F location frontend | not started |
 | 4-B snapshots backend | not started |
 | 4-F snapshots frontend | not started |

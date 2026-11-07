@@ -19,6 +19,7 @@ export interface PlayerView {
   status: PlayerStatus
   points: number
   ready: boolean
+  suspect: boolean
   joined_at: string
 }
 
@@ -231,6 +232,7 @@ export interface RevealView {
   count: number | null
   label: string
   expires_at: string
+  target_player_id: string | null
 }
 
 export interface UseAbilityInput {

@@ -12,7 +12,7 @@
 import {
   SNAPSHOT_WINDOW_COUNT,
   SNAPSHOT_WINDOW_SEC,
-} from './constants'
+} from './constants.ts'
 
 export type RoundPhase = 'lobby' | 'hiding' | 'hunting' | 'paused' | 'ended'
 
