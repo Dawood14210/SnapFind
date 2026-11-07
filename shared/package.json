@@ -1,0 +1,16 @@
+{
+  "name": "snapfind-shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared game constants and round-state helpers for Snapfind (owned by Agent A, backend)",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4",
+    "vitest": "^2.1.9"
+  }
+}

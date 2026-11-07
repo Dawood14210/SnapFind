@@ -1,0 +1,21 @@
+{
+  "name": "snapfind-scripts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Backend dev scripts for Snapfind (RLS checks, bots) — owned by Agent A",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "rls-check": "tsx rls-check.ts",
+    "bots": "tsx bots.ts"
+  },
+  "devDependencies": {
+    "@supabase/supabase-js": "^2.45.4",
+    "dotenv": "^16.4.5",
+    "tsx": "^4.19.1",
+    "typescript": "^5.5.4",
+    "vitest": "^2.1.9"
+  }
+}
