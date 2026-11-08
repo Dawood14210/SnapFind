@@ -141,11 +141,14 @@ These shapes are returned by every endpoint that includes them.
   "count": null,
   "label": "pulse: 80 m circle",
   "expires_at": "2026-11-07T18:00:10.000Z",
+  "window_index": 1,
   "target_player_id": "uuid|null"
 }
 ```
 
 - `count` is set only for `zone_scan` (number of hiders in the circle).
+- `window_index` is set for `last_known` reveals (the missed snapshot window,
+  Phase 4 — keeps `resolve_window` idempotent); null for every other kind.
 - `label` is human-readable; for `clue` it is the hider's current task type (no name).
 - `target_player_id` is the player the clue is about (a hider for
   `last_known` / `out_of_bounds`; null for abilities).
@@ -242,6 +245,19 @@ Detailed RLS per table (Phase 3, location):
   records who the clue is about (a hider for `last_known` / `out_of_bounds`).
 
 The remaining policies are listed per table when their phase lands (Phase 3–8).
+
+Detailed RLS per table (Phase 4, snapshots):
+
+- **snapshots** — `select`: own row (`player_id = auth.uid()`), the room's
+  finder, tagged players, or anyone once the round has `ended` (multiple
+  select policies OR together). `insert`: own row only. No update/delete
+  policies — the Edge Functions write with the service key.
+- The `snapshots` **bucket** is private. Clients may `insert` storage objects
+  only into their own folder `{room_id}/{player_id}/{window_index}.jpg` (the
+  `is_snapshot_uploader()` helper checks the path shape, that the player id
+  segment is the caller and that the caller has a players row in that room).
+  No anon select policy — images are served via 60-second signed URLs from
+  `snapshot_urls` (service key).
 
 Realtime: `rooms`, `players` and `events` are Realtime-enabled. Changes respect
 RLS, so members receive live updates for their own room only. The frontend
@@ -456,11 +472,17 @@ from the token. Request bodies are JSON. Responses are JSON.
 - **Request:** `{ "room_id": string, "window_index": number, "task_id": string|null, "image_path": string, "taken_at": string }`
 - **Response:** `{ "ok": true, "snapshot_id": string, "late": boolean, "points_awarded": number }`
 - **Errors:** `NOT_HIDER`, `ROUND_NOT_HUNTING`, `WINDOW_NOT_OPEN`, `ALREADY_SUBMITTED`,
-  `INVALID_IMAGE_PATH`, `WINDOW_CLOSED`.
+  `INVALID_IMAGE_PATH`, `INVALID_WINDOW`, `WINDOW_CLOSED`.
 - **Notes:** the client uploads the image to
-  `snapshots/{room_id}/{player_id}/{window_index}.jpg` first (own folder, RLS-allowed),
-  then calls this. On time = within 45 s of the window opening (+10 points); late =
-  within 2 min (0 points, `late: true`); beyond that `WINDOW_CLOSED`.
+  `snapshots/{room_id}/{player_id}/{window_index}.jpg` first (own folder,
+  storage-RLS-allowed — the path must match exactly, no subfolders), then calls
+  this. Window n opens at n × 5 min of round time: on time = within 45 s of the
+  opening (+10 points); late = within 2 min (0 points, `late: true`); beyond
+  that `WINDOW_CLOSED`; before it `WINDOW_NOT_OPEN`. The bonus window
+  (`window_index: 0`, photo task) skips the timing check — the task owns its
+  timing (Phase 5) — and earns no points here. `points_awarded` is 10 or 0.
+  Deploy with the Supabase CLI (`supabase functions deploy submit_snapshot`)
+  so the local import graph (`lib/snapshot.ts`) is bundled.
 
 ### snapshot_urls — Phase 4
 
@@ -470,7 +492,9 @@ from the token. Request bodies are JSON. Responses are JSON.
   windows.
 - **Response:** `{ "snapshots": [ { "id", "player_id", "window_index", "task_id", "taken_at", "late", "image_url" } ] }`
 - **Errors:** `ROOM_NOT_FOUND`, `NOT_IN_ROOM`.
-- **Notes:** `image_url` is a signed URL valid for 60 s (service key).
+- **Notes:** `image_url` is a signed URL valid for 60 s (service key — the anon
+  key can never sign). Newest first. Deploy with the Supabase CLI
+  (`supabase functions deploy snapshot_urls`).
 
 ### resolve_window — Phase 4
 
@@ -478,12 +502,16 @@ from the token. Request bodies are JSON. Responses are JSON.
   window closes).
 - **Request:** `{ "room_id": string, "window_index": number }`
 - **Response:** `{ "ok": true, "resolved": boolean, "reveals_created": number }`
-- **Errors:** `ROOM_NOT_FOUND`, `WINDOW_NOT_DUE` (window must be ≥ 2 min past its
-  close), `ROUND_NOT_HUNTING`.
+- **Errors:** `ROOM_NOT_FOUND`, `NOT_IN_ROOM`, `WINDOW_NOT_DUE` (window must be ≥ 2 min
+  past its close), `ROUND_NOT_HUNTING`.
 - **Notes:** for each active hider with no snapshot in that window, inserts a
-  `last_known` reveal — 60 m / 15 s (first miss) or 40 m / 30 s (second miss in the
-  round), centred on the stored position at check time, label noting the missed
-  window. `resolved: false` if nothing changed.
+  `last_known` reveal — 60 m / 15 s (first miss in the round) or 40 m / 30 s
+  (second miss) — centred on the stored position at check time (latest reading;
+  play-area edge if unknown), label noting the missed window
+  (`last_known: missed window n`). A hider is revealed at most once per window:
+  the reveal stores `window_index`, so repeat calls change nothing
+  (`resolved: false`). Deploy with the Supabase CLI
+  (`supabase functions deploy resolve_window`).
 
 ### task_progress — Phase 5
 
