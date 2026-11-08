@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { endRound, pauseRound, resumeRound } from '@/api'
 import { friendlyError } from '@/lib/friendlyError'
@@ -13,8 +13,13 @@ import { getRoundState } from '@shared/roundState'
 import { HIDE_DURATION_SEC } from '@shared/constants'
 import { countdownSeconds, formatSeconds, phaseColor, phaseLabel } from '@/lib/roundDisplay'
 import { outOfBoundsBanner } from '@/lib/proximity'
+import CameraCapture from '@/components/CameraCapture'
 import GameMap from '@/components/GameMap'
 import ProximityRing from '@/components/ProximityRing'
+import SnapshotFeed from '@/components/SnapshotFeed'
+import SnapshotPrompt from '@/components/SnapshotPrompt'
+import { useReveals } from '@/hooks/useReveals'
+import { useSnapshots } from '@/hooks/useSnapshots'
 
 const FALLBACK_CENTRE: [number, number] = [31.5204, 74.3587]
 
@@ -47,6 +52,25 @@ export default function Round() {
   // round_status polling (proximity, out-of-bounds, counts) every ~5 s.
   const { status, error: statusError } = useRoundStatus(roomId, active)
 
+  // Phase 4: snapshot windows — the hider gets the capture prompt, the
+  // finder gets the snapshot feed and live reveals on the map.
+  const snapshots = useSnapshots({
+    roomId,
+    roundSeconds: display?.round_seconds ?? 0,
+    role: me?.role ?? null,
+    hunting: phase === 'hunting',
+  })
+  const [captureOpen, setCaptureOpen] = useState(false)
+  const [snapshotToast, setSnapshotToast] = useState<string | null>(null)
+  const [feedOpen, setFeedOpen] = useState(false)
+  const [devTools] = useState(() => new URLSearchParams(window.location.search).has('dev'))
+  const { reveals } = useReveals({
+    roomId,
+    hunting: isFinder && phase === 'hunting',
+    isFinder,
+    userId: user?.id ?? null,
+  })
+
   const handleHostAction = async (action: () => Promise<unknown>) => {
     try {
       await action()
@@ -68,6 +92,13 @@ export default function Round() {
       navigator.vibrate(200)
     }
   }, [oob])
+
+  // Auto-dismiss the snapshot toast.
+  useEffect(() => {
+    if (!snapshotToast) return
+    const id = setTimeout(() => setSnapshotToast(null), 3000)
+    return () => clearTimeout(id)
+  }, [snapshotToast])
 
   if (lobbyLoading || roundLoading) {
     return (
@@ -115,6 +146,20 @@ export default function Round() {
       ]
     : []
 
+  // Reveals for the finder's map (Phase 4): red = missed snapshot window
+  // (last_known), amber = captured hiding spot (live until it expires).
+  const finderRevealDots = useMemo(
+    () =>
+      reveals.map((r) => ({
+        id: r.id,
+        latlng: [r.lat, r.lng] as [number, number],
+        radiusM: r.radius_m ?? 40,
+        color: r.kind === 'last_known' ? '#dc2626' : '#d97706',
+        label: `${r.kind === 'last_known' ? 'Hiding spot (missed)' : 'Hiding spot'} — until ${new Date(r.expires_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+      })),
+    [reveals],
+  )
+
   return (
     <div className="min-h-screen flex flex-col gap-4 p-6 bg-slate-50 max-w-lg mx-auto">
       {phase === 'paused' && (
@@ -159,6 +204,68 @@ export default function Round() {
         </div>
       )}
 
+      {me?.role === 'hider' && phase === 'hunting' && (
+        <div className="rounded-2xl bg-white p-4 shadow">
+          <p className="text-sm font-bold uppercase tracking-wide text-slate-500">Snapshots</p>
+          <p className="mt-1 text-base font-semibold text-slate-900">
+            Next snapshot {snapshots.nextSnapshotLabel ?? '— none left'}
+          </p>
+          {snapshots.sentSnapshots.length > 0 && (
+            <div className="mt-3 flex gap-2 overflow-x-auto">
+              {snapshots.sentSnapshots.map((s) => (
+                <img
+                  key={s.id}
+                  src={s.image_url}
+                  alt="Your snapshot"
+                  className="h-16 w-16 rounded-lg border border-slate-200 object-cover"
+                />
+              ))}
+            </div>
+          )}
+          {devTools && (
+            <button
+              onClick={snapshots.devOpenWindow}
+              className="mt-3 text-xs font-bold uppercase tracking-wide text-emerald-700"
+            >
+              Dev: open window now
+            </button>
+          )}
+        </div>
+      )}
+
+      {snapshotToast && (
+        <div className="fixed bottom-6 left-1/2 z-[65] -translate-x-1/2 rounded-full bg-slate-900 px-6 py-3 text-sm font-bold text-white shadow">
+          {snapshotToast}
+        </div>
+      )}
+
+      {snapshots.prompt.open && (
+        <SnapshotPrompt
+          secondsLeft={snapshots.prompt.secondsLeft}
+          windowIndex={snapshots.windowIndex}
+          onOpenCamera={() => setCaptureOpen(true)}
+          onDismiss={snapshots.dismissPrompt}
+        />
+      )}
+
+      {captureOpen && (
+        <CameraCapture
+          roomId={roomId}
+          windowIndex={snapshots.windowIndex}
+          userId={user?.id ?? ''}
+          onCancel={() => setCaptureOpen(false)}
+          onDone={(result) => {
+            setCaptureOpen(false)
+            snapshots.dismissPrompt()
+            setSnapshotToast(
+              result.late
+                ? 'Snapshot was late — 0 points'
+                : `Snapshot on time — +${result.points_awarded} points`,
+            )
+          }}
+        />
+      )}
+
       <div className="bg-white rounded-2xl shadow p-8 text-center">
         <p className={`text-sm font-bold uppercase tracking-widest ${phaseColor(phase)}`}>
           {phaseLabel(phase)}
@@ -181,8 +288,17 @@ export default function Round() {
             centre={mapCentre}
             radiusM={room.radius_m}
             dots={myDot}
+            reveals={finderRevealDots}
             onTap={location.fakeMode ? (l) => location.setFake(l) : undefined}
           />
+          {isFinder && phase === 'hunting' && (
+            <button
+              onClick={() => setFeedOpen(true)}
+              className="absolute right-3 top-3 rounded-xl bg-slate-900 px-4 py-2 text-sm font-bold text-white shadow active:scale-95"
+            >
+              Snapshots
+            </button>
+          )}
           {location.fakeMode && (
             <p className="absolute left-3 top-3 rounded-md bg-slate-900/80 px-2 py-1 text-xs font-bold text-white">
               FAKE POSITION
@@ -194,6 +310,10 @@ export default function Round() {
             </p>
           )}
         </div>
+      )}
+
+      {feedOpen && (
+        <SnapshotFeed roomId={roomId} players={players} onClose={() => setFeedOpen(false)} />
       )}
 
       {active && isHost && (
