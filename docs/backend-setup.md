@@ -53,6 +53,7 @@ Combined per-phase SQL (paste the whole block for a phase in order):
 | settings | `003_room_settings.sql` | **shipped** — full SQL below |
 | dev tools | `004_dev_tools.sql` | **shipped** — full SQL below |
 | 3 | `005_location.sql` | **shipped** — full SQL below |
+| fix | `fixes/leave_room_ended.sql` | **shipped** — paste now if you already ran 001 (allows leaving an ended room) |
 | 4 | `006_snapshots.sql` | ships with the Phase 4 PR |
 | 5 | `007_tasks.sql` | ships with the Phase 5 PR |
 | 6 | `008_abilities.sql` | ships with the Phase 6 PR |

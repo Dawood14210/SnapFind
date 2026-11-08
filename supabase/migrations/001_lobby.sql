@@ -227,7 +227,9 @@ end;
 $$;
 
 -- -----------------------------------------------------------------------------
--- leave_room: lobby only; host handoff to the earliest-joined player
+-- leave_room: allowed in lobby and after the round ended; a running round
+-- (hiding/hunting/paused) refuses with ROUND_ACTIVE. Host handoff to the
+-- earliest-joined player.
 -- -----------------------------------------------------------------------------
 create or replace function leave_room(p_room_id uuid)
 returns jsonb
@@ -241,7 +243,7 @@ begin
   if not exists (select 1 from players where id = auth.uid() and room_id = p_room_id) then
     raise exception 'NOT_IN_ROOM';
   end if;
-  if (select status from rooms where id = p_room_id) <> 'lobby' then
+  if (select status from rooms where id = p_room_id) in ('hiding', 'hunting', 'paused') then
     raise exception 'ROUND_ACTIVE';
   end if;
 
