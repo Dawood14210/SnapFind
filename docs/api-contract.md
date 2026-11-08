@@ -290,9 +290,11 @@ signatures stay plain; only the argument objects sent to the server use the
 - **Caller:** player in the room.
 - **Request:** `{ "p_room_id": string }`
 - **Response:** `{ "ok": true }`
-- **Errors:** `NOT_IN_ROOM`, `ROUND_ACTIVE` (lobby only).
+- **Errors:** `NOT_IN_ROOM`, `ROUND_ACTIVE` (only while the round is running:
+  hiding/hunting/paused).
 - **Notes:** host leaving hands the room to the earliest-joined player; if the last
-  player leaves, the room is deleted.
+  player leaves, the room is deleted. Leaving is allowed in the lobby and after
+  the round has ended.
 
 ### kick_player — Phase 1
 

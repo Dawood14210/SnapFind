@@ -11,7 +11,8 @@
 | dev tools dummy players (backend + frontend) | done |
 | 3-B location backend | done |
 | 3-F location frontend | done (PR #12) |
-| home room-flow fix (rules → name → room area with in-room detection) | PR open |
+| home room-flow fix (rules → name → room area with in-room detection) | done (PR #13) |
+| leave ended room fix (leave_room + Home card Leave in ended state) | PR open |
 | 4-B snapshots backend | not started |
 | 4-F snapshots frontend | not started |
 | 5-B tasks backend | not started |

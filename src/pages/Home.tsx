@@ -233,6 +233,7 @@ function RoomScreen({
     const room = state.room
     const host = state.players.find((p) => p.id === room.host_id)?.nickname
     const running = room.status !== 'lobby' && room.status !== 'ended'
+    const canLeave = !running
     const statusLabel =
       room.status === 'lobby' ? 'Lobby' : room.status === 'ended' ? 'Round ended' : 'Round in progress'
     const statusClass =
@@ -263,6 +264,11 @@ function RoomScreen({
                 The round is running — join to jump back in.
               </p>
             )}
+            {room.status === 'ended' && (
+              <p className="mt-2 text-sm font-semibold text-slate-500">
+                The round has ended — leave to start a new one.
+              </p>
+            )}
           </div>
 
           <div className="flex gap-3">
@@ -272,7 +278,7 @@ function RoomScreen({
             >
               Join room
             </button>
-            {room.status === 'lobby' && (
+            {canLeave && (
               <button
                 onClick={handleLeave}
                 disabled={busy}
