@@ -10,7 +10,8 @@
 | settings host round settings (backend + frontend) | done |
 | dev tools dummy players (backend + frontend) | done |
 | 3-B location backend | done |
-| 3-F location frontend | PR open |
+| 3-F location frontend | done (PR #12) |
+| home room-flow fix (rules → name → room area with in-room detection) | PR open |
 | 4-B snapshots backend | not started |
 | 4-F snapshots frontend | not started |
 | 5-B tasks backend | not started |
