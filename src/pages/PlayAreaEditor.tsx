@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { MapContainer, Circle, CircleMarker, useMap } from 'react-leaflet'
+import { MapContainer, TileLayer, Circle, CircleMarker, useMap } from 'react-leaflet'
 import type { LatLng, LeafletMouseEvent, Map as LeafletMap } from 'leaflet'
 import { useNavigate, useParams } from 'react-router-dom'
 import { setPlayArea } from '@/api'
@@ -59,6 +59,7 @@ export default function PlayAreaEditor() {
   const [radius, setRadius] = useState(DEFAULT_RADIUS_M)
   const [saving, setSaving] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [tilesError, setTilesError] = useState(false)
 
   // Seed the editor from the room's play area; otherwise try the device
   // location once so the host starts near where they are.
@@ -182,8 +183,17 @@ export default function PlayAreaEditor() {
         </p>
       </div>
 
-      <div className="bg-white rounded-2xl shadow overflow-hidden">
+      <div className="relative bg-white rounded-2xl shadow overflow-hidden">
         <MapContainer center={[centre.lat, centre.lng]} zoom={15} style={{ height: '55vh' }}>
+          <TileLayer
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            attribution="© OpenStreetMap contributors"
+            eventHandlers={{
+              tileerror: () => setTilesError(true),
+              // Clear the error banner once tiles start loading again.
+              tileload: () => setTilesError((prev) => (prev ? false : prev)),
+            }}
+          />
           <Circle
             center={[centre.lat, centre.lng]}
             radius={radius}
@@ -201,6 +211,11 @@ export default function PlayAreaEditor() {
             onClick={handleMapClick}
           />
         </MapContainer>
+        {tilesError && (
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-white/85 p-6 text-center text-sm font-semibold text-slate-700">
+            Map tiles failed to load — check your connection and tap the map to try again.
+          </div>
+        )}
       </div>
 
       <button
