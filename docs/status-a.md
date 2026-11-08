@@ -10,8 +10,7 @@
 | settings host round settings (backend + frontend) | done |
 | dev tools dummy players (backend + frontend) | done |
 | 3-B location backend | done |
-| 3-F location frontend | not started |
-| 3-F location frontend | not started |
+| 3-F location frontend | PR open |
 | 4-B snapshots backend | not started |
 | 4-F snapshots frontend | not started |
 | 5-B tasks backend | not started |
@@ -30,7 +29,7 @@
 | 0 — layout, shared constants, API contract, setup docs | ready for integration |
 | 1 — lobby (rooms/players/events + RLS + RPCs) | ready for integration |
 | 2 — play area, start, clock (RPCs + getRoundState) | ready for integration |
-| 3 — location (locations/reveals + round_status) | not started |
+| 3 — location (locations/reveals + round_status) | backend done, frontend PR open |
 | 4 — snapshots (submit/resolve/urls) | not started |
 | 5 — tasks (task_progress/skip_task) | not started |
 | 6 — abilities (use_ability + getCharges) | not started |

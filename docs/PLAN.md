@@ -25,8 +25,7 @@ two-phone test checklist and STOP.
 | settings host round settings (backend + frontend) | done (PR #8) |
 | dev tools dummy players (backend + frontend) | done (PR #9) |
 | 3-B location backend | done (this PR) |
-| 3-F location frontend | not started |
-| 3-F location frontend | not started |
+| 3-F location frontend | done (this PR) |
 | 4-B snapshots backend | not started |
 | 4-F snapshots frontend | not started |
 | 5-B tasks backend | not started |
@@ -110,8 +109,10 @@ banner. A Ready toggle that only works after location permission and a reading
 with accuracy of 30 m or better. Poll round_status every 5 seconds.
 ProximityRing for hiders (green, amber, red, with a shape or text as well as
 colour, and a short vibration at red), out-of-bounds banner with a 20-second
-countdown, each player's own dot with an accuracy ring. Dev tool, dev builds
-only: with ?fake=1 position moves to wherever you tap on the map.
+countdown, each player's own dot with an accuracy ring. Dev tool: with ?fake=1
+(any build, explicit opt-in so it can be tested on Vercel) the map shows the
+tap position and tapping the map moves the fake position there; a FAKE
+POSITION badge offers Default position / Clear on the round screen.
 
 ### Phase 4 (snapshots)
 

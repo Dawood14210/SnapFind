@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { MapContainer, TileLayer, Circle, CircleMarker, useMap } from 'react-leaflet'
-import type { LatLng, LeafletMouseEvent, Map as LeafletMap } from 'leaflet'
+import type { LatLng, Map as LeafletMap } from 'leaflet'
 import { useNavigate, useParams } from 'react-router-dom'
 import { setPlayArea } from '@/api'
 import { friendlyError } from '@/lib/friendlyError'
 import { useAuth } from '@/auth/AuthProvider'
 import { useLobby } from '@/hooks/useLobby'
+import GameMap from '@/components/GameMap'
 import {
   PLAY_AREA_RADIUS_MAX_M,
   PLAY_AREA_RADIUS_MIN_M,
@@ -21,33 +21,6 @@ interface Centre {
   lng: number
 }
 
-/** Expose the Leaflet map instance and forward map clicks to the parent. */
-function MapController({
-  onReady,
-  onClick,
-}: {
-  onReady: (map: LeafletMap) => void
-  onClick: (latlng: LatLng) => void
-}) {
-  const map = useMap()
-  const clickRef = useRef(onClick)
-  clickRef.current = onClick
-
-  useEffect(() => {
-    onReady(map)
-  }, [map, onReady])
-
-  useEffect(() => {
-    const handler = (e: LeafletMouseEvent) => clickRef.current(e.latlng)
-    map.on('click', handler)
-    return () => {
-      map.off('click', handler)
-    }
-  }, [map])
-
-  return null
-}
-
 export default function PlayAreaEditor() {
   const { code = '' } = useParams()
   const navigate = useNavigate()
@@ -59,7 +32,6 @@ export default function PlayAreaEditor() {
   const [radius, setRadius] = useState(DEFAULT_RADIUS_M)
   const [saving, setSaving] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
-  const [tilesError, setTilesError] = useState(false)
 
   // Seed the editor from the room's play area; otherwise try the device
   // location once so the host starts near where they are.
@@ -183,40 +155,14 @@ export default function PlayAreaEditor() {
         </p>
       </div>
 
-      <div className="relative bg-white rounded-2xl shadow overflow-hidden">
-        <MapContainer center={[centre.lat, centre.lng]} zoom={15} style={{ height: '55vh' }}>
-          <TileLayer
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            attribution="© OpenStreetMap contributors"
-            eventHandlers={{
-              tileerror: () => setTilesError(true),
-              // Clear the error banner once tiles start loading again.
-              tileload: () => setTilesError((prev) => (prev ? false : prev)),
-            }}
-          />
-          <Circle
-            center={[centre.lat, centre.lng]}
-            radius={radius}
-            pathOptions={{ color: '#2563eb', fillColor: '#2563eb', fillOpacity: 0.12 }}
-          />
-          <CircleMarker
-            center={[centre.lat, centre.lng]}
-            radius={8}
-            pathOptions={{ color: '#2563eb', fillColor: '#2563eb', fillOpacity: 1 }}
-          />
-          <MapController
-            onReady={(map) => {
-              mapRef.current = map
-            }}
-            onClick={handleMapClick}
-          />
-        </MapContainer>
-        {tilesError && (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-white/85 p-6 text-center text-sm font-semibold text-slate-700">
-            Map tiles failed to load — check your connection and tap the map to try again.
-          </div>
-        )}
-      </div>
+      <GameMap
+        centre={[centre.lat, centre.lng]}
+        radiusM={radius}
+        onTap={handleMapClick}
+        onMapReady={(map) => {
+          mapRef.current = map
+        }}
+      />
 
       <button
         onClick={handleUseLocation}

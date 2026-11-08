@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { devAddDummyPlayers, kickPlayer, leaveRoom, setReady, setRoomSettings, startRound } from '@/api'
 import type { PlayerView } from '@/api'
 import { friendlyError } from '@/lib/friendlyError'
 import { useAuth } from '@/auth/AuthProvider'
 import { useLobby } from '@/hooks/useLobby'
+import { useLocation } from '@/hooks/useLocation'
 import { MIN_PLAYERS } from '@shared/constants'
 
 export default function Lobby() {
@@ -23,6 +24,18 @@ export default function Lobby() {
   const [savingSettings, setSavingSettings] = useState(false)
   const [dummyCount, setDummyCount] = useState(3)
   const [dummyMessage, setDummyMessage] = useState<string | null>(null)
+
+  // Location for the Ready gate: a Ready toggle only works after permission
+  // and a reading with accuracy of 30 m or better.
+  const location = useLocation({ roomId: room?.id ?? '', active: false, userId: user?.id ?? null })
+  const promptedForLocation = useRef(false)
+
+  useEffect(() => {
+    if (room && !promptedForLocation.current) {
+      promptedForLocation.current = true
+      location.requestPermission()
+    }
+  }, [room, location.requestPermission])
 
   const me = players.find((p) => p.id === user?.id) ?? null
   const isHost = room?.host_id === user?.id
@@ -395,17 +408,33 @@ export default function Lobby() {
 
       <div className="flex flex-col gap-3">
         {me && !roundStarted && (
-          <button
-            onClick={() => handleReady(!me.ready)}
-            disabled={!room}
-            className={`w-full rounded-xl py-3 text-base font-bold shadow active:scale-95 ${
-              me.ready
-                ? 'bg-emerald-600 text-white'
-                : 'bg-slate-200 text-slate-800'
-            }`}
-          >
-            {me.ready ? '✓ Ready — waiting for others' : 'Mark ready'}
-          </button>
+          location.ready ? (
+            <button
+              onClick={() => handleReady(!me.ready)}
+              disabled={!room}
+              className={`w-full rounded-xl py-3 text-base font-bold shadow active:scale-95 ${
+                me.ready ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-800'
+              }`}
+            >
+              {me.ready ? '✓ Ready — waiting for others' : 'Mark ready'}
+            </button>
+          ) : (
+            <button
+              onClick={location.requestPermission}
+              className="w-full rounded-xl bg-blue-600 py-3 text-base font-bold text-white shadow active:scale-95"
+            >
+              Enable location to mark ready
+            </button>
+          )
+        )}
+        {me && !roundStarted && !location.ready && (
+          <p className="text-center text-sm text-slate-500">
+            {location.permission === 'denied'
+              ? 'Location permission denied — enable it in your browser settings.'
+              : location.reading
+                ? 'Waiting for a better GPS reading (30 m or better)…'
+                : 'Location permission is needed to mark ready.'}
+          </p>
         )}
         <button
           onClick={handleLeave}
