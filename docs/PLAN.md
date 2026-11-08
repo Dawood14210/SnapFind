@@ -85,12 +85,14 @@ start, clock RPCs + getRoundState with tests). All merged into main.
 
 ### Phase 1 (lobby)
 
-Home screen (nickname remembered locally, Create room, code input and Join),
-one-time Rules screen (stay inside the area, stay off roads, no photos of faces)
-with Accept, Lobby (large room code with copy, live player list through
-Realtime, Ready toggle, host mark, Leave, host Kick), routing /room/:code,
-session kept across refresh, clear errors for a full room, wrong code,
-duplicate nickname and started room.
+Home screen (one-time Rules gate, then nickname entry, then a room area that
+detects an existing membership — RLS lets a member read their own players row
+and room — and shows the room with Join / Leave (lobby only), otherwise
+Create room and code input), one-time Rules screen (stay inside the area, stay
+off roads, no photos of faces) with Accept, Lobby (large room code with copy,
+live player list through Realtime, Ready toggle, host mark, Leave, host Kick),
+routing /room/:code, session kept across refresh, clear errors for a full
+room, wrong code, duplicate nickname and started room.
 
 ### Phase 2 (play area, roles, clock)
 
