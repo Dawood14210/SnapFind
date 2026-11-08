@@ -18,6 +18,11 @@ This document lists everything the human must do by hand in Supabase. Agent A
 
 ## 3. Create the snapshots bucket
 
+The Phase 4 SQL (section 5g) creates the private `snapshots` bucket itself
+(`insert into storage.buckets ... on conflict do nothing`) — you only need
+this dashboard step if you prefer to create the bucket manually before
+running the SQL:
+
 1. Storage → New bucket → name: **`snapshots`** → private (never public).
 2. The bucket stores photos at `{room_id}/{player_id}/{window_index}.jpg`.
    Row Level Security on the `snapshots` table enforces who may read which rows;
@@ -1075,9 +1080,9 @@ alter table players add column if not exists suspect boolean not null default fa
 ## 5g. Phase 4 combined SQL (paste into the SQL Editor)
 
 This is the complete Phase 4 migration (`006_snapshots.sql`) — paste it as one
-block **after** `005_location.sql`. The `snapshots` bucket itself is created in
-the dashboard (section 3) — the policy below references it by name, so create
-the bucket first or in any order.
+block **after** `005_location.sql`. It also creates the private `snapshots`
+bucket itself (idempotent `storage.buckets` insert), so the dashboard step in
+section 3 is optional. INSERT policies use WITH CHECK only.
 
 ```sql
 -- ============================================================================
@@ -1090,8 +1095,8 @@ the bucket first or in any order.
 --                        answers to (keeps resolve_window idempotent)
 --
 -- Storage:
---   the `snapshots` bucket is created in the dashboard (private) — see
---   docs/backend-setup.md section 3. Clients may insert images only into
+--   this migration creates the private `snapshots` bucket itself (insert
+--   into storage.buckets, idempotent). Clients may insert images only into
 --   their own folder {room_id}/{player_id}/{window_index}.jpg (policy
 --   below); images are served via 60-second signed URLs from the
 --   snapshot_urls Edge Function (service key).
@@ -1149,10 +1154,11 @@ create policy snapshots_ended_select on snapshots for select to authenticated
   ));
 
 -- insert: own row only (the client inserts after uploading its own image;
--- submit_snapshot also inserts with the service key).
+-- submit_snapshot also inserts with the service key). INSERT policies use
+-- WITH CHECK only (USING is meaningless on insert).
 drop policy if exists snapshots_own_insert on snapshots;
 create policy snapshots_own_insert on snapshots for insert to authenticated
-  using (player_id = auth.uid()) with check (player_id = auth.uid());
+  with check (player_id = auth.uid());
 
 -- ----------------------------------------------------------------------------
 -- reveals.window_index: which snapshot window a last_known reveal answers
@@ -1164,11 +1170,18 @@ create index if not exists reveals_room_target_window_idx
   on reveals (room_id, target_player_id, kind, window_index);
 
 -- ----------------------------------------------------------------------------
--- Storage: uploads to the private `snapshots` bucket are allowed only into
--- the caller's own folder {room_id}/{player_id}/{window_index}.jpg, and only
--- while the caller has a players row in that room. Reads stay denied for the
--- anon key (images are served via signed URLs from snapshot_urls).
+-- Storage: create the private `snapshots` bucket (idempotent — the dashboard
+-- step in docs/backend-setup.md section 3 becomes optional), then allow
+-- uploads only into the caller's own folder
+-- {room_id}/{player_id}/{window_index}.jpg, and only while the caller has a
+-- players row in that room. Reads stay denied for the anon key (images are
+-- served via signed URLs from snapshot_urls). INSERT policies use WITH CHECK
+-- only.
 -- ----------------------------------------------------------------------------
+insert into storage.buckets (id, name, public)
+values ('snapshots', 'snapshots', false)
+on conflict do nothing;
+
 create or replace function is_snapshot_uploader(p_name text)
 returns boolean
 language plpgsql
@@ -1190,7 +1203,6 @@ $$;
 drop policy if exists snapshots_bucket_own_insert on storage.objects;
 create policy snapshots_bucket_own_insert on storage.objects
   for insert to authenticated
-  using (bucket_id = 'snapshots' and is_snapshot_uploader(name))
   with check (bucket_id = 'snapshots' and is_snapshot_uploader(name));
 ```
 

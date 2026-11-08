@@ -4,6 +4,16 @@ One SQL file per phase, named `NNN_phase_name.sql`, run in numeric order in the
 Supabase SQL Editor (see `/docs/backend-setup.md` for the combined per-phase SQL
 files and the run order).
 
+SQL rules (reviewed before every PR):
+
+- INSERT policies use **WITH CHECK only** — `USING` is meaningless on insert.
+- SECURITY DEFINER helpers set `search_path` and take `p_`-prefixed parameters.
+- RPC/function parameter names use the `p_` prefix; the contract and the
+  frontend wrappers must match them exactly.
+- Test every migration against a real Postgres before opening a PR where
+  possible; otherwise state clearly in the PR that it was reviewed manually
+  only.
+
 Planned files:
 
 - `001_lobby.sql` — Phase 1: rooms, players, events + RLS + RPCs
