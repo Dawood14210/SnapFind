@@ -32,7 +32,7 @@
 | 1 — lobby (rooms/players/events + RLS + RPCs) | ready for integration |
 | 2 — play area, start, clock (RPCs + getRoundState) | ready for integration |
 | 3 — location (locations/reveals + round_status) | backend done, frontend PR open |
-| 4 — snapshots (submit/resolve/urls) | not started |
+| 4 — snapshots (submit/resolve/urls) | backend done, frontend PR #17 open |
 | 5 — tasks (task_progress/skip_task) | not started |
 | 6 — abilities (use_ability + getCharges) | not started |
 | 7 — tags, scores, rematch | not started |
