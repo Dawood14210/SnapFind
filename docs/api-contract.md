@@ -99,12 +99,15 @@ These shapes are returned by every endpoint that includes them.
   "status": "active|tagged",
   "points": 0,
   "ready": false,
+  "suspect": false,
   "joined_at": "2026-11-07T17:50:00.000Z"
 }
 ```
 
 - `role` is `null` in the lobby, then `"finder"` or `"hider"` after `start_round`.
 - `status` is `"active"` until tagged, then `"tagged"`.
+- `suspect` is set by the `round_status` speed check (two readings implying
+  over 12 m/s); the host sees it with the `speed_check` event.
 
 ### RoundState (output of `getRoundState`)
 
@@ -137,12 +140,15 @@ These shapes are returned by every endpoint that includes them.
   "radius_m": 80,
   "count": null,
   "label": "pulse: 80 m circle",
-  "expires_at": "2026-11-07T18:00:10.000Z"
+  "expires_at": "2026-11-07T18:00:10.000Z",
+  "target_player_id": "uuid|null"
 }
 ```
 
 - `count` is set only for `zone_scan` (number of hiders in the circle).
 - `label` is human-readable; for `clue` it is the hider's current task type (no name).
+- `target_player_id` is the player the clue is about (a hider for
+  `last_known` / `out_of_bounds`; null for abilities).
 - Only the finder reads reveals (RLS).
 
 ### TaskView
@@ -220,9 +226,20 @@ Detailed RLS per table (Phase 1, corrected form):
 - **rooms** — `select`: `is_room_member(rooms.id)`. No client write policies —
   every write goes through an RPC.
 - **players** — `select`: `is_room_member(players.room_id)`. No client write
-  policies — every write goes through an RPC.
+  policies — every write goes through an RPC. (`suspect` is set by the
+  `round_status` Edge Function with the service key.)
 - **events** — `select`: `is_room_member(events.room_id)`. No client write
   policies — server writes only (RPCs / service key).
+
+Detailed RLS per table (Phase 3, location):
+
+- **locations** — own row only: `select` / `insert` / `update` / `delete`
+  with `player_id = auth.uid()` (the location hook upserts its own readings).
+  No policy ever exposes another player's readings.
+- **reveals** — finder select only: `select` with `player_id = auth.uid()`
+  (the `player_id` column is the finder who may read the clue). No client
+  write policies — Edge Functions write with the service key. `target_player_id`
+  records who the clue is about (a hider for `last_known` / `out_of_bounds`).
 
 The remaining policies are listed per table when their phase lands (Phase 3–8).
 
@@ -424,7 +441,12 @@ from the token. Request bodies are JSON. Responses are JSON.
 - **Errors:** `ROOM_NOT_FOUND`, `NOT_IN_ROOM`.
 - **Notes:** uses the service key internally. After 60 s out of bounds, inserts an
   `out_of_bounds` reveal (30 m circle, 10 s) centred on the player's last known
-  position (or the play-area edge if unknown) when none is active.
+  position (or the play-area edge if unknown) when none is active. Speed check:
+  two consecutive readings implying over 12 m/s mark the player `suspect` and
+  write a `speed_check` event for the host. The `round` object matches
+  `getRoundState` exactly (shared parity). Deploy with the Supabase CLI
+  (`supabase functions deploy round_status`) so the local import graph
+  (`lib/geo.ts`, `lib/round.ts`) is bundled.
 
 ### submit_snapshot — Phase 4
 
@@ -643,7 +665,7 @@ proximity bands, `SPEED_LIMIT_M_PER_S`, `OUT_OF_BOUNDS_*`, `LAST_KNOWN_*`,
 | 2 | set_play_area, start_round, server_now, advance_round, pause_round, resume_round, end_round; getRoundState | landed (PR #3) |
 | settings | rooms.hide_duration_min / max_players; set_room_settings; clock uses per-room settings | landed (PR #8) |
 | dev tools | dev_add_dummy_players (testing) | landed (this PR) |
-| 3 | locations, reveals + RLS; round_status | planned |
+| 3 | locations, reveals + RLS; round_status | landed (this PR) |
 | 4 | snapshots + RLS; submit_snapshot, snapshot_urls, resolve_window | planned |
 | 5 | tasks + RLS; task_progress, skip_task | planned |
 | 6 | ability_uses + RLS; use_ability; getCharges | planned |
