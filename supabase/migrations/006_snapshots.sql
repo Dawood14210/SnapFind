@@ -8,8 +8,8 @@
 --                        answers to (keeps resolve_window idempotent)
 --
 -- Storage:
---   the `snapshots` bucket is created in the dashboard (private) — see
---   docs/backend-setup.md section 3. Clients may insert images only into
+--   this migration creates the private `snapshots` bucket itself (insert
+--   into storage.buckets, idempotent). Clients may insert images only into
 --   their own folder {room_id}/{player_id}/{window_index}.jpg (policy
 --   below); images are served via 60-second signed URLs from the
 --   snapshot_urls Edge Function (service key).
@@ -67,10 +67,11 @@ create policy snapshots_ended_select on snapshots for select to authenticated
   ));
 
 -- insert: own row only (the client inserts after uploading its own image;
--- submit_snapshot also inserts with the service key).
+-- submit_snapshot also inserts with the service key). INSERT policies use
+-- WITH CHECK only (USING is meaningless on insert).
 drop policy if exists snapshots_own_insert on snapshots;
 create policy snapshots_own_insert on snapshots for insert to authenticated
-  using (player_id = auth.uid()) with check (player_id = auth.uid());
+  with check (player_id = auth.uid());
 
 -- ----------------------------------------------------------------------------
 -- reveals.window_index: which snapshot window a last_known reveal answers
@@ -82,11 +83,18 @@ create index if not exists reveals_room_target_window_idx
   on reveals (room_id, target_player_id, kind, window_index);
 
 -- ----------------------------------------------------------------------------
--- Storage: uploads to the private `snapshots` bucket are allowed only into
--- the caller's own folder {room_id}/{player_id}/{window_index}.jpg, and only
--- while the caller has a players row in that room. Reads stay denied for the
--- anon key (images are served via signed URLs from snapshot_urls).
+-- Storage: create the private `snapshots` bucket (idempotent — the dashboard
+-- step in docs/backend-setup.md section 3 becomes optional), then allow
+-- uploads only into the caller's own folder
+-- {room_id}/{player_id}/{window_index}.jpg, and only while the caller has a
+-- players row in that room. Reads stay denied for the anon key (images are
+-- served via signed URLs from snapshot_urls). INSERT policies use WITH CHECK
+-- only.
 -- ----------------------------------------------------------------------------
+insert into storage.buckets (id, name, public)
+values ('snapshots', 'snapshots', false)
+on conflict do nothing;
+
 create or replace function is_snapshot_uploader(p_name text)
 returns boolean
 language plpgsql
@@ -108,5 +116,4 @@ $$;
 drop policy if exists snapshots_bucket_own_insert on storage.objects;
 create policy snapshots_bucket_own_insert on storage.objects
   for insert to authenticated
-  using (bucket_id = 'snapshots' and is_snapshot_uploader(name))
   with check (bucket_id = 'snapshots' and is_snapshot_uploader(name));
