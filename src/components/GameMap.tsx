@@ -20,6 +20,14 @@ export interface MapReveal {
   label?: string
 }
 
+export interface MapTarget {
+  lat: number
+  lng: number
+  /** Target radius in metres (30 m task circle, 80 m distance circle). */
+  radiusM: number
+  color: string
+}
+
 interface GameMapProps {
   centre: [number, number]
   /** Play-area circle radius in metres. */
@@ -27,6 +35,8 @@ interface GameMapProps {
   dots?: MapDot[]
   /** Reveals (finder map, Phase 4). */
   reveals?: MapReveal[]
+  /** Task target circle (hider map, Phase 5). */
+  target?: MapTarget | null
   /** Tap handler (the play-area editor uses it to set the centre). */
   onTap?: (latlng: LatLng) => void
   height?: string
@@ -67,6 +77,7 @@ export default function GameMap({
   radiusM,
   dots = [],
   reveals = [],
+  target = null,
   onTap,
   height = '55vh',
   onMapReady,
@@ -124,6 +135,25 @@ export default function GameMap({
             </Marker>
           </Fragment>
         ))}
+        {target && (
+          <Fragment>
+            <Circle
+              center={[target.lat, target.lng]}
+              radius={target.radiusM}
+              pathOptions={{
+                color: target.color,
+                fillColor: target.color,
+                fillOpacity: 0.15,
+                dashArray: '4 8',
+              }}
+            />
+            <CircleMarker
+              center={[target.lat, target.lng]}
+              radius={8}
+              pathOptions={{ color: target.color, fillColor: target.color, fillOpacity: 1 }}
+            />
+          </Fragment>
+        )}
         {onMapReady && <MapReady onReady={onMapReady} />}
         {onTap && <MapTap onTap={onTap} />}
       </MapContainer>

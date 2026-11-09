@@ -18,10 +18,19 @@ import GameMap from '@/components/GameMap'
 import ProximityRing from '@/components/ProximityRing'
 import SnapshotFeed from '@/components/SnapshotFeed'
 import SnapshotPrompt from '@/components/SnapshotPrompt'
+import TaskCard from '@/components/TaskCard'
 import { useReveals } from '@/hooks/useReveals'
 import { useSnapshots } from '@/hooks/useSnapshots'
+import { useTasks } from '@/hooks/useTasks'
+import type { TaskView } from '@/api'
 
 const FALLBACK_CENTRE: [number, number] = [31.5204, 74.3587]
+
+/** A numeric task param (params is Record<string, unknown> from the server). */
+function numParam(params: Record<string, unknown>, key: string): number | null {
+  const value = params[key]
+  return typeof value === 'number' ? value : null
+}
 
 export default function Round() {
   const { code = '' } = useParams()
@@ -71,6 +80,16 @@ export default function Round() {
     userId: user?.id ?? null,
   })
 
+  // Phase 5: hider tasks — polled every ~5 s during the hunt (the server
+  // assigns, completes and scores them).
+  const tasks = useTasks({
+    roomId,
+    enabled: me?.role === 'hider' && phase === 'hunting',
+  })
+  const currentTask = tasks.currentTask
+  const [photoCaptureTask, setPhotoCaptureTask] = useState<TaskView | null>(null)
+  const [taskToast, setTaskToast] = useState<string | null>(null)
+
   const handleHostAction = async (action: () => Promise<unknown>) => {
     try {
       await action()
@@ -99,6 +118,13 @@ export default function Round() {
     const id = setTimeout(() => setSnapshotToast(null), 3000)
     return () => clearTimeout(id)
   }, [snapshotToast])
+
+  // Auto-dismiss the task toast.
+  useEffect(() => {
+    if (!taskToast) return
+    const id = setTimeout(() => setTaskToast(null), 3000)
+    return () => clearTimeout(id)
+  }, [taskToast])
 
   if (lobbyLoading || roundLoading) {
     return (
@@ -160,6 +186,59 @@ export default function Round() {
     [reveals],
   )
 
+  // Task target circle on the hider's own map (Phase 5): the reach_zone
+  // circle, or the play-area circle the hider must get outside of.
+  const taskTarget = useMemo(() => {
+    const t = currentTask
+    if (!t) return null
+    const lat = numParam(t.params, 'lat')
+    if (lat === null) return null
+    const lng = numParam(t.params, 'lng') ?? 0
+    if (t.type === 'reach_zone') {
+      return {
+        lat,
+        lng,
+        radiusM: numParam(t.params, 'radius_m') ?? 30,
+        color: '#2563eb',
+      }
+    }
+    if (t.type === 'distance') {
+      return {
+        lat,
+        lng,
+        radiusM: numParam(t.params, 'radius_m') ?? 80,
+        color: '#2563eb',
+      }
+    }
+    return null
+  }, [currentTask])
+
+  // Dev tool (?dev=1): complete the current task. Teleports the fake
+  // position onto the target (reach_zone / distance) so the next server
+  // poll completes it; opens the photo capture for photo tasks.
+  const devCompleteTask = () => {
+    const t = currentTask
+    if (!t) return
+    if (!location.fakeMode) {
+      setTaskToast('Dev teleport needs ?fake=1')
+      return
+    }
+    const lat = numParam(t.params, 'lat')
+    const lng = numParam(t.params, 'lng')
+    if (t.type === 'reach_zone' && lat !== null) {
+      location.setFake({ lat, lng: lng ?? 0 })
+      setTaskToast('Dev: teleported into the task circle')
+    } else if (t.type === 'distance' && lat !== null) {
+      // ~220 m north of the play area centre.
+      location.setFake({ lat: lat + 0.002, lng: lng ?? 0 })
+      setTaskToast('Dev: teleported far from the centre')
+    } else if (t.type === 'photo') {
+      setPhotoCaptureTask(t)
+    } else {
+      setTaskToast('Dev: stay still 3 minutes to complete stay_put')
+    }
+  }
+
   return (
     <div className="min-h-screen flex flex-col gap-4 p-6 bg-slate-50 max-w-lg mx-auto">
       {phase === 'paused' && (
@@ -202,6 +281,23 @@ export default function Round() {
             {hiders.length} hiders · Finder: {finderNick}
           </p>
         </div>
+      )}
+
+      {me?.role === 'hider' && phase === 'hunting' && currentTask && (
+        <TaskCard
+          task={currentTask}
+          skipsLeft={tasks.skipsLeft}
+          serverNowMs={serverNowMs}
+          onSkip={() => {
+            void tasks
+              .skip(currentTask.id)
+              .then(() => setTaskToast('Task skipped — 5 points lost'))
+              .catch((err) => setTaskToast(friendlyError(err)))
+          }}
+          onPhoto={() => setPhotoCaptureTask(currentTask)}
+          devTools={devTools}
+          onDevComplete={devCompleteTask}
+        />
       )}
 
       {me?.role === 'hider' && phase === 'hunting' && (
@@ -266,6 +362,25 @@ export default function Round() {
         />
       )}
 
+      {photoCaptureTask && (
+        <CameraCapture
+          roomId={roomId}
+          windowIndex={0}
+          taskId={photoCaptureTask.id}
+          userId={user?.id ?? ''}
+          onCancel={() => setPhotoCaptureTask(null)}
+          onDone={(result) => {
+            setPhotoCaptureTask(null)
+            setTaskToast(
+              result.late
+                ? 'Photo was late — 0 points'
+                : 'Photo submitted — task completes on the next poll',
+            )
+            void tasks.refresh()
+          }}
+        />
+      )}
+
       <div className="bg-white rounded-2xl shadow p-8 text-center">
         <p className={`text-sm font-bold uppercase tracking-widest ${phaseColor(phase)}`}>
           {phaseLabel(phase)}
@@ -289,6 +404,7 @@ export default function Round() {
             radiusM={room.radius_m}
             dots={myDot}
             reveals={finderRevealDots}
+            target={me?.role === 'hider' ? taskTarget : null}
             onTap={location.fakeMode ? (l) => location.setFake(l) : undefined}
           />
           {isFinder && phase === 'hunting' && (
