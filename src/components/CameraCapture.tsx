@@ -8,6 +8,8 @@ import { STORAGE_BUCKET } from '@shared/constants'
 interface CameraCaptureProps {
   roomId: string
   windowIndex: number
+  /** Task id for photo tasks (bonus window 0); null for regular windows. */
+  taskId?: string | null
   userId: string
   onCancel: () => void
   onDone: (result: SubmitSnapshotResult) => void
@@ -27,6 +29,7 @@ type Phase = 'camera' | 'preview' | 'sending' | 'done'
 export default function CameraCapture({
   roomId,
   windowIndex,
+  taskId = null,
   userId,
   onCancel,
   onDone,
@@ -99,7 +102,7 @@ export default function CameraCapture({
       const snapshot = await submitSnapshot({
         room_id: roomId,
         window_index: windowIndex,
-        task_id: null,
+        task_id: taskId,
         image_path: imagePath,
         taken_at: new Date().toISOString(),
       })
