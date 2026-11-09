@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
-import { MapContainer, TileLayer, Circle, CircleMarker, useMap } from 'react-leaflet'
+import { MapContainer, TileLayer, Circle, CircleMarker, Marker, Popup, useMap } from 'react-leaflet'
 import type { LatLng, LeafletMouseEvent, Map as LeafletMap } from 'leaflet'
 
 export interface MapDot {
@@ -9,11 +9,24 @@ export interface MapDot {
   accuracyM?: number | null
 }
 
+export interface MapReveal {
+  id: string
+  latlng: [number, number]
+  /** Reveal radius in metres. */
+  radiusM: number
+  /** Colour from the kind (missed = red, others = amber). */
+  color: string
+  /** Popup label (kind + expiry). */
+  label?: string
+}
+
 interface GameMapProps {
   centre: [number, number]
   /** Play-area circle radius in metres. */
   radiusM?: number | null
   dots?: MapDot[]
+  /** Reveals (finder map, Phase 4). */
+  reveals?: MapReveal[]
   /** Tap handler (the play-area editor uses it to set the centre). */
   onTap?: (latlng: LatLng) => void
   height?: string
@@ -53,6 +66,7 @@ export default function GameMap({
   centre,
   radiusM,
   dots = [],
+  reveals = [],
   onTap,
   height = '55vh',
   onMapReady,
@@ -91,6 +105,23 @@ export default function GameMap({
               radius={8}
               pathOptions={{ color: '#16a34a', fillColor: '#16a34a', fillOpacity: 1 }}
             />
+          </Fragment>
+        ))}
+        {reveals.map((reveal) => (
+          <Fragment key={reveal.id}>
+            <Circle
+              center={reveal.latlng}
+              radius={reveal.radiusM}
+              pathOptions={{ color: reveal.color, fillColor: reveal.color, fillOpacity: 0.15 }}
+            />
+            <CircleMarker
+              center={reveal.latlng}
+              radius={8}
+              pathOptions={{ color: reveal.color, fillColor: reveal.color, fillOpacity: 1 }}
+            />
+            <Marker position={reveal.latlng}>
+              <Popup>{reveal.label}</Popup>
+            </Marker>
           </Fragment>
         ))}
         {onMapReady && <MapReady onReady={onMapReady} />}

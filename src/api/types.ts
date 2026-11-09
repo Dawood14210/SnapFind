@@ -232,6 +232,7 @@ export interface RevealView {
   count: number | null
   label: string
   expires_at: string
+  window_index: number | null
   target_player_id: string | null
 }
 

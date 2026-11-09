@@ -26,8 +26,8 @@ two-phone test checklist and STOP.
 | dev tools dummy players (backend + frontend) | done (PR #9) |
 | 3-B location backend | done (this PR) |
 | 3-F location frontend | done (this PR) |
-| 4-B snapshots backend | not started |
-| 4-F snapshots frontend | not started |
+| 4-B snapshots backend | done (PR #15, SQL fix PR #16) |
+| 4-F snapshots frontend | PR #17 open |
 | 5-B tasks backend | not started |
 | 5-F tasks frontend | not started |
 | 6-B abilities backend | not started |
