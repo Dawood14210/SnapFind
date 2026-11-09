@@ -19,10 +19,13 @@ import ProximityRing from '@/components/ProximityRing'
 import SnapshotFeed from '@/components/SnapshotFeed'
 import SnapshotPrompt from '@/components/SnapshotPrompt'
 import TaskCard from '@/components/TaskCard'
+import AbilitiesPanel, { ABILITY_LABELS } from '@/components/AbilitiesPanel'
+import { useAbilities } from '@/hooks/useAbilities'
+import { useAbilityAlerts } from '@/hooks/useAbilityAlerts'
 import { useReveals } from '@/hooks/useReveals'
 import { useSnapshots } from '@/hooks/useSnapshots'
 import { useTasks } from '@/hooks/useTasks'
-import type { TaskView } from '@/api'
+import type { AbilityKind, TaskView } from '@/api'
 
 const FALLBACK_CENTRE: [number, number] = [31.5204, 74.3587]
 
@@ -90,6 +93,26 @@ export default function Round() {
   const [photoCaptureTask, setPhotoCaptureTask] = useState<TaskView | null>(null)
   const [taskToast, setTaskToast] = useState<string | null>(null)
 
+  // Phase 6: finder abilities — charge meter via getCharges, cooldown and
+  // history; hiders get a toast + vibration when the finder uses one.
+  const abilities = useAbilities({
+    roomId,
+    enabled: isFinder && phase === 'hunting',
+    huntSeconds: display?.round_seconds ?? 0,
+  })
+  const [abilityPanelOpen, setAbilityPanelOpen] = useState(false)
+  const [scanRadiusM, setScanRadiusM] = useState(80)
+  const [abilityToast, setAbilityToast] = useState<string | null>(null)
+
+  useAbilityAlerts({
+    roomId,
+    enabled: me?.role === 'hider' && phase === 'hunting',
+    onAlert: (kind: AbilityKind) => {
+      setAbilityToast(`The finder used ${ABILITY_LABELS[kind]}`)
+      if ('vibrate' in navigator) navigator.vibrate(200)
+    },
+  })
+
   const handleHostAction = async (action: () => Promise<unknown>) => {
     try {
       await action()
@@ -125,6 +148,13 @@ export default function Round() {
     const id = setTimeout(() => setTaskToast(null), 3000)
     return () => clearTimeout(id)
   }, [taskToast])
+
+  // Auto-dismiss the ability toast.
+  useEffect(() => {
+    if (!abilityToast) return
+    const id = setTimeout(() => setAbilityToast(null), 3000)
+    return () => clearTimeout(id)
+  }, [abilityToast])
 
   if (lobbyLoading || roundLoading) {
     return (
@@ -172,19 +202,46 @@ export default function Round() {
       ]
     : []
 
-  // Reveals for the finder's map (Phase 4): red = missed snapshot window
-  // (last_known), amber = captured hiding spot (live until it expires).
+  // Reveals for the finder's map: pulse = amber, zone_scan = teal, clue =
+  // violet, red = penalty reveals (last_known / out_of_bounds). The popup
+  // uses the server label plus the expiry.
   const finderRevealDots = useMemo(
     () =>
       reveals.map((r) => ({
         id: r.id,
         latlng: [r.lat, r.lng] as [number, number],
         radiusM: r.radius_m ?? 40,
-        color: r.kind === 'last_known' ? '#dc2626' : '#d97706',
-        label: `${r.kind === 'last_known' ? 'Hiding spot (missed)' : 'Hiding spot'} — until ${new Date(r.expires_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+        color:
+          r.kind === 'pulse'
+            ? '#d97706'
+            : r.kind === 'zone_scan'
+              ? '#0d9488'
+              : r.kind === 'clue'
+                ? '#7c3aed'
+                : '#dc2626',
+        label: `${r.label} — until ${new Date(r.expires_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
       })),
     [reveals],
   )
+
+  // Clue cards for the abilities panel: the live clue reveals.
+  const clueCards = useMemo(
+    () =>
+      reveals
+        .filter((r) => r.kind === 'clue')
+        .map((r) => ({ id: r.id, label: r.label, expiresAtMs: Date.parse(r.expires_at) })),
+    [reveals],
+  )
+
+  // Fire an ability (throws with the server error — shown as a toast).
+  const fireAbility = async (kind: AbilityKind) => {
+    try {
+      await abilities.use(kind, { lat: null, lng: null, radiusM: null })
+      setAbilityToast(`${ABILITY_LABELS[kind]} used`)
+    } catch (err) {
+      setAbilityToast(friendlyError(err))
+    }
+  }
 
   // Task target circle on the hider's own map (Phase 5): the reach_zone
   // circle, or the play-area circle the hider must get outside of.
@@ -329,9 +386,9 @@ export default function Round() {
         </div>
       )}
 
-      {snapshotToast && (
+      {(snapshotToast ?? taskToast ?? abilityToast) && (
         <div className="fixed bottom-6 left-1/2 z-[65] -translate-x-1/2 rounded-full bg-slate-900 px-6 py-3 text-sm font-bold text-white shadow">
-          {snapshotToast}
+          {snapshotToast ?? taskToast ?? abilityToast}
         </div>
       )}
 
@@ -405,15 +462,45 @@ export default function Round() {
             dots={myDot}
             reveals={finderRevealDots}
             target={me?.role === 'hider' ? taskTarget : null}
-            onTap={location.fakeMode ? (l) => location.setFake(l) : undefined}
+            onTap={
+              abilities.placing
+                ? (l) => {
+                    void abilities
+                      .use('zone_scan', { lat: l.lat, lng: l.lng, radiusM: scanRadiusM })
+                      .then((result) => {
+                        abilities.setPlacing(false)
+                        setAbilityToast(`Zone scan: ${result.reveal.label}`)
+                      })
+                      .catch((err) => {
+                        abilities.setPlacing(false)
+                        setAbilityToast(friendlyError(err))
+                      })
+                  }
+                : location.fakeMode
+                  ? (l) => location.setFake(l)
+                  : undefined
+            }
           />
           {isFinder && phase === 'hunting' && (
             <button
+              onClick={() => setAbilityPanelOpen(true)}
+              className="absolute right-3 top-3 rounded-xl bg-violet-600 px-4 py-2 text-sm font-bold text-white shadow active:scale-95"
+            >
+              Abilities
+            </button>
+          )}
+          {isFinder && phase === 'hunting' && (
+            <button
               onClick={() => setFeedOpen(true)}
-              className="absolute right-3 top-3 rounded-xl bg-slate-900 px-4 py-2 text-sm font-bold text-white shadow active:scale-95"
+              className="absolute right-3 top-14 rounded-xl bg-slate-900 px-4 py-2 text-sm font-bold text-white shadow active:scale-95"
             >
               Snapshots
             </button>
+          )}
+          {abilities.placing && (
+            <p className="absolute left-1/2 top-3 -translate-x-1/2 rounded-md bg-teal-900/90 px-3 py-1 text-xs font-bold text-white shadow">
+              Tap the map to place the zone scan ({scanRadiusM} m)
+            </p>
           )}
           {location.fakeMode && (
             <p className="absolute left-3 top-3 rounded-md bg-slate-900/80 px-2 py-1 text-xs font-bold text-white">
@@ -430,6 +517,27 @@ export default function Round() {
 
       {feedOpen && (
         <SnapshotFeed roomId={roomId} players={players} onClose={() => setFeedOpen(false)} />
+      )}
+
+      {abilityPanelOpen && (
+        <AbilitiesPanel
+          huntSeconds={display?.round_seconds ?? 0}
+          serverNowMs={serverNowMs}
+          chargesLeft={abilities.chargesLeft}
+          cooldownUntilMs={abilities.cooldownUntilMs}
+          history={abilities.history}
+          clueCards={clueCards}
+          scanRadiusM={scanRadiusM}
+          onScanRadiusChange={setScanRadiusM}
+          onUse={(kind) => void fireAbility(kind)}
+          onStartZoneScan={() => {
+            setAbilityPanelOpen(false)
+            abilities.setPlacing(true)
+          }}
+          onDevGiveCharges={abilities.devGiveCharges}
+          devTools={devTools}
+          onClose={() => setAbilityPanelOpen(false)}
+        />
       )}
 
       {active && isHost && (
