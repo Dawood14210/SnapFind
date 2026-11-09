@@ -558,10 +558,16 @@ from the token. Request bodies are JSON. Responses are JSON.
 - **Response:** `{ "ok": true, "reveal": RevealView, "charges_left": number, "cooldown_until": number }`
 - **Errors:** `NOT_FINDER`, `ROUND_NOT_HUNTING`, `NOT_ENOUGH_CHARGES`, `ON_COOLDOWN`,
   `INVALID_PARAMS`, `PULSE_SAME_HIDERS` (same hider twice within 5 min).
-- **Notes:** checks charges via `getCharges` and a 30 s cooldown. `pulse` = 80 m
-  circle centred up to 50 m away from the hider, 10 s. `zone_scan` = hider count in
-  the circle, 20 s. `clue_card` = current task type of one random active hider (no
-  name), 30 s. Writes an `ability_used` event containing only the ability name.
+- **Notes:** checks charges via `getCharges` (`shared/charges.ts`: 1 charge per
+  4 min of hunt time, +1 once the round reaches 20:00, minus spent — the spend
+  is the `ability_uses` row count for the finder in the room) and a 30 s
+  cooldown between any two uses. `pulse` = 80 m circle centred up to 50 m away
+  from the hider, 10 s; the same hider cannot be pulsed twice within 5
+  minutes. `zone_scan` = hider count in the circle, 20 s. `clue_card` = current
+  task type of one random active hider (no name), 30 s. Writes an
+  `ability_used` event containing only the ability name, and one
+  `ability_uses` row per use. Reveals are written to `reveals` with kind
+  `pulse` / `zone_scan` / `clue` (the finder's own rows).
 
 ### request_tag — Phase 7
 
@@ -716,6 +722,6 @@ proximity bands, `SPEED_LIMIT_M_PER_S`, `OUT_OF_BOUNDS_*`, `LAST_KNOWN_*`,
 | 3 | locations, reveals + RLS; round_status | landed (this PR) |
 | 4 | snapshots + RLS; submit_snapshot, snapshot_urls, resolve_window | planned |
 | 5 | tasks + RLS; task_progress, skip_task | in this PR |
-| 6 | ability_uses + RLS; use_ability; getCharges | planned |
+| 6 | ability_uses + RLS; use_ability; getCharges | in this PR |
 | 7 | tags + RLS; request_tag, confirm_tag, dispute_tag, finalize_tag, resolve_dispute, finalize_scores, rematch | planned |
 | 8 | sos_alerts + RLS; sos, purge_photos; RLS check script, bots | planned |
