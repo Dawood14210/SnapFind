@@ -30,7 +30,7 @@ two-phone test checklist and STOP.
 | 4-F snapshots frontend | PR #17 open |
 | 5-B tasks backend | done (PR open) |
 | 5-F tasks frontend | done (PR open) |
-| 6-B abilities backend | not started |
+| 6-B abilities backend | done (PR open) |
 | 6-F abilities frontend | not started |
 | 7-B tags / scores / rematch backend | not started |
 | 7-F tags / results frontend | not started |
