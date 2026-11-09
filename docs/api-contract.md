@@ -212,7 +212,7 @@ migration.
 | Table | Phase | Purpose | RLS summary |
 |-------|-------|---------|-------------|
 | rooms | 1 | Room state, play area, round clock | members select (read-only); all writes via RPCs |
-| players | 1 | Membership, nickname, role, points | members select (read-only); all writes via RPCs |
+| players | 1 | Membership, nickname, role, points, skips_used | members select (read-only); all writes via RPCs |
 | events | 1 | Append-only game events | members select (read-only); server writes only |
 | locations | 3 | Per-player GPS readings | **own row only** (read+write); server logic via service key |
 | reveals | 3/4 | Finder-only location clues | **finder select only**; service-key write |
@@ -521,6 +521,22 @@ from the token. Request bodies are JSON. Responses are JSON.
 - **Errors:** `ROOM_NOT_FOUND`, `NOT_HIDER`.
 - **Notes:** also updates task statuses (done/expired) server-side and assigns a new
   task when the current one is done/skipped/expired, per the assignment rules.
+  `skips_left` is `MAX_SKIPS_PER_ROUND` minus `players.skips_used`. The tasks
+  list is the hider's tasks in the room, newest first. Completion is
+  server-side from the hider's own GPS readings (fresh `locations` rows):
+  `reach_zone` — every reading in the last 20 s inside the 30 m circle;
+  `stay_put` — readings spanning 3 min, each consecutive pair within 10 m,
+  readings with accuracy worse than 25 m ignored; `distance` — the latest
+  reading outside the 80 m circle around the play area centre; `photo` — a
+  bonus snapshot (`window_index: 0`) exists for this hider. A completed task
+  awards its points once (status moves to `done` server-side, so a second
+  poll cannot re-award); a task past `expires_at` becomes `expired` with no
+  points. Assignment (also used at hunt start — the first poll after the
+  round starts hunting assigns the opening task): duration is random 4–8
+  minutes, `reach_zone` gets a 30 m circle inside the play area, a movement
+  task (`reach_zone`/`distance`) is forced when the last two tasks were not
+  movement, and a type is never repeated three times in a row. Points per
+  type: 35 / 10 / 20 / 20.
 
 ### skip_task — Phase 5
 
@@ -528,7 +544,9 @@ from the token. Request bodies are JSON. Responses are JSON.
 - **Request:** `{ "room_id": string, "task_id": string }`
 - **Response:** `{ "ok": true, "points_penalty": 5, "skips_left": number }`
 - **Errors:** `NOT_HIDER`, `NO_ACTIVE_TASK`, `SKIPS_EXHAUSTED`, `ROUND_NOT_HUNTING`.
-- **Notes:** marks the task `skipped` (−5 points) and assigns the next task.
+- **Notes:** marks the task `skipped` (−5 points, counted in
+  `players.skips_used`, capped at 2 per round — the counter is reset by
+  rematch) and assigns the next task.
 
 ### use_ability — Phase 6
 
@@ -697,7 +715,7 @@ proximity bands, `SPEED_LIMIT_M_PER_S`, `OUT_OF_BOUNDS_*`, `LAST_KNOWN_*`,
 | dev tools | dev_add_dummy_players (testing) | landed (this PR) |
 | 3 | locations, reveals + RLS; round_status | landed (this PR) |
 | 4 | snapshots + RLS; submit_snapshot, snapshot_urls, resolve_window | planned |
-| 5 | tasks + RLS; task_progress, skip_task | planned |
+| 5 | tasks + RLS; task_progress, skip_task | in this PR |
 | 6 | ability_uses + RLS; use_ability; getCharges | planned |
 | 7 | tags + RLS; request_tag, confirm_tag, dispute_tag, finalize_tag, resolve_dispute, finalize_scores, rematch | planned |
 | 8 | sos_alerts + RLS; sos, purge_photos; RLS check script, bots | planned |

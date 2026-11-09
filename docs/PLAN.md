@@ -28,7 +28,7 @@ two-phone test checklist and STOP.
 | 3-F location frontend | done (this PR) |
 | 4-B snapshots backend | done (PR #15, SQL fix PR #16) |
 | 4-F snapshots frontend | PR #17 open |
-| 5-B tasks backend | not started |
+| 5-B tasks backend | done (PR open) |
 | 5-F tasks frontend | not started |
 | 6-B abilities backend | not started |
 | 6-F abilities frontend | not started |
