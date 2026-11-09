@@ -120,11 +120,13 @@ export default function GameMap({
         ))}
         {reveals.map((reveal) => (
           <Fragment key={reveal.id}>
-            <Circle
-              center={reveal.latlng}
-              radius={reveal.radiusM}
-              pathOptions={{ color: reveal.color, fillColor: reveal.color, fillOpacity: 0.15 }}
-            />
+            {reveal.radiusM ? (
+              <Circle
+                center={reveal.latlng}
+                radius={reveal.radiusM}
+                pathOptions={{ color: reveal.color, fillColor: reveal.color, fillOpacity: 0.15 }}
+              />
+            ) : null}
             <CircleMarker
               center={reveal.latlng}
               radius={8}

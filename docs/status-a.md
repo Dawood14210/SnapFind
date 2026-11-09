@@ -34,6 +34,6 @@
 | 3 — location (locations/reveals + round_status) | backend done, frontend PR open |
 | 4 — snapshots (submit/resolve/urls) | backend done, frontend PR #17 open |
 | 5 — tasks (task_progress/skip_task) | backend done, frontend PR open |
-| 6 — abilities (use_ability + getCharges) | backend PR open |
+| 6 — abilities (use_ability + getCharges) | backend done, frontend PR open |
 | 7 — tags, scores, rematch | not started |
 | 8 — safety and checks (sos, rls-check, bots) | not started |
