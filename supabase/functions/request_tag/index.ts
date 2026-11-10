@@ -72,11 +72,21 @@ Deno.serve(async (req) => {
     .from('events')
     .select('created_at')
     .eq('room_id', roomId)
-    .eq('player_id', caller)
+    .eq('payload->>finder_id', caller)
     .eq('type', 'tag_attempt_failed')
     .gte('created_at', new Date(lockoutCutoffMs).toISOString())
   if ((lockRows ?? []).length > 0) {
     return jsonError('ON_TAG_LOCKOUT', `Wait ${TAG_LOCKOUT_SEC} s before tagging again`)
+  }
+
+  async function failedAttempt(code: string, message: string): Promise<Response> {
+    const { error } = await service.from('events').insert({
+      room_id: roomId,
+      type: 'tag_attempt_failed',
+      payload: { finder_id: caller, hider_id: hiderId, reason: code },
+    })
+    if (error) return jsonError('DB_ERROR', error.message, 500)
+    return jsonError(code, message)
   }
 
   // 3. The hider must still be active.
@@ -116,20 +126,20 @@ Deno.serve(async (req) => {
     nowMs - Date.parse(finderReading.updated_at) > TAG_LOCATION_MAX_AGE_SEC * 1000 ||
     nowMs - Date.parse(hiderReading.updated_at) > TAG_LOCATION_MAX_AGE_SEC * 1000
   if (stale) {
-    return jsonError('LOCATION_TOO_OLD', `Both locations must be under ${TAG_LOCATION_MAX_AGE_SEC} s old`)
+    return failedAttempt('LOCATION_TOO_OLD', `Both locations must be under ${TAG_LOCATION_MAX_AGE_SEC} s old`)
   }
 
   const badAccuracy =
     finderReading.accuracy_m === null || finderReading.accuracy_m > TAG_ACCURACY_MAX_M ||
     hiderReading.accuracy_m === null || hiderReading.accuracy_m > TAG_ACCURACY_MAX_M
   if (badAccuracy) {
-    return jsonError('ACCURACY_TOO_POOR', `Both GPS readings must be accurate to within ${TAG_ACCURACY_MAX_M} m`)
+    return failedAttempt('ACCURACY_TOO_POOR', `Both GPS readings must be accurate to within ${TAG_ACCURACY_MAX_M} m`)
   }
 
   const fromDb: LatLng = { lat: finderReading.lat, lng: finderReading.lng }
   const toDb: LatLng = { lat: hiderReading.lat, lng: hiderReading.lng }
   if (haversineM(fromDb, toDb) > TAG_DISTANCE_M) {
-    return jsonError('TOO_FAR', `Must be within ${TAG_DISTANCE_M} m of the hider`)
+    return failedAttempt('TOO_FAR', `Must be within ${TAG_DISTANCE_M} m of the hider`)
   }
 
   // 5. All checks passed — insert a pending tag.

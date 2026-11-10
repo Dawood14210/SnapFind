@@ -88,9 +88,10 @@ export async function applyTagConfirm(
       type: 'round_ended',
       payload: { finder_id: tag.finder_id, bonus: UNTAGGED_END_BONUS },
     })
-    // end_round (host-bypass SECURITY DEFINER, 002_play_area.sql) performs the
-    // transition: rooms.status = 'ended' — the same code path as a manual end.
-    await service.rpc('end_round', { room_id: roomId })
+    // Automatic completion uses the service role; end_round is host-only.
+    const { error: endError } = await service.from('rooms')
+      .update({ status: 'ended' }).eq('id', roomId)
+    if (endError) return { points: null, ended: false }
     ended = true
   }
 

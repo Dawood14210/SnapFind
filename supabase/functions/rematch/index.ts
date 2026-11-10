@@ -58,7 +58,11 @@ Deno.serve(async (req) => {
 
   // 2. The RPC wipes the round data, resets players, and picks the next
   //    finder (top-scoring hider).
-  const { data: result, error: rematchError } = await service.rpc('rematch', {
+  const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    global: { headers: { Authorization: `Bearer ${auth}` } },
+    auth: { persistSession: false },
+  })
+  const { data: result, error: rematchError } = await userClient.rpc('rematch', {
     p_room_id: roomId,
   })
   if (rematchError) {
