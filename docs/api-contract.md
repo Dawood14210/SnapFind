@@ -275,8 +275,7 @@ SQL function parameter names, so every request key is the SQL parameter name
 with a `p_` prefix (`p_room_id`, `p_nickname`, `p_code`, `p_lat`, `p_lng`,
 `p_radius_m`, `p_finder_id`, `p_ready`, `p_player_id`). The frontend wrapper
 signatures stay plain; only the argument objects sent to the server use the
-`p_` names. Every RPC still to be built (Phase 7+: `rematch`) uses the same
-`p_` prefix and is listed below.
+`p_` names. Every RPC uses the same `p_` prefix and is listed below.
 
 ### create_room — Phase 1
 
@@ -723,5 +722,5 @@ proximity bands, `SPEED_LIMIT_M_PER_S`, `OUT_OF_BOUNDS_*`, `LAST_KNOWN_*`,
 | 4 | snapshots + RLS; submit_snapshot, snapshot_urls, resolve_window | planned |
 | 5 | tasks + RLS; task_progress, skip_task | in this PR |
 | 6 | ability_uses + RLS; use_ability; getCharges | in this PR |
-| 7 | tags + RLS; request_tag, confirm_tag, dispute_tag, finalize_tag, resolve_dispute, finalize_scores, rematch | planned |
+| 7 | tags + RLS; request_tag, confirm_tag, dispute_tag, finalize_tag, resolve_dispute, finalize_scores, rematch | in this PR |
 | 8 | sos_alerts + RLS; sos, purge_photos; RLS check script, bots | planned |
