@@ -64,7 +64,7 @@ Deno.serve(async (req) => {
 
   const { data: room } = await service.from('rooms').select('status').eq('id', roomId).maybeSingle()
   if (!room) return jsonError('ROOM_NOT_FOUND', 'Room not found', 404)
-  if (room.status !== 'hunt') return jsonError('ROUND_NOT_HUNTING', 'Not currently hunting')
+  if (room.status !== 'hunting') return jsonError('ROUND_NOT_HUNTING', 'Not currently hunting')
 
   // 2. Lockout — a failed attempt by this finder in this room recently.
   const lockoutCutoffMs = Date.now() - TAG_LOCKOUT_SEC * 1000
@@ -103,18 +103,18 @@ Deno.serve(async (req) => {
   // 4. Freshest location rows for both players.
   const { data: finderLocations, error: finderLocError } = await service
     .from('locations')
-    .select('lat, lng, accuracy_m, updated_at')
+    .select('lat, lng, accuracy_m, reading_at')
     .eq('player_id', caller)
     .eq('room_id', roomId)
-    .order('updated_at', { ascending: false })
+    .order('reading_at', { ascending: false })
     .limit(1)
   if (finderLocError) return jsonError('DB_ERROR', finderLocError.message, 500)
   const { data: hiderLocations, error: hiderLocError } = await service
     .from('locations')
-    .select('lat, lng, accuracy_m, updated_at')
+    .select('lat, lng, accuracy_m, reading_at')
     .eq('player_id', hiderId)
     .eq('room_id', roomId)
-    .order('updated_at', { ascending: false })
+    .order('reading_at', { ascending: false })
     .limit(1)
   if (hiderLocError) return jsonError('DB_ERROR', hiderLocError.message, 500)
   const finderReading = finderLocations?.[0]
@@ -123,8 +123,8 @@ Deno.serve(async (req) => {
   const nowMs = Date.now()
   const stale =
     !finderReading || !hiderReading ||
-    nowMs - Date.parse(finderReading.updated_at) > TAG_LOCATION_MAX_AGE_SEC * 1000 ||
-    nowMs - Date.parse(hiderReading.updated_at) > TAG_LOCATION_MAX_AGE_SEC * 1000
+    nowMs - Date.parse(finderReading.reading_at) > TAG_LOCATION_MAX_AGE_SEC * 1000 ||
+    nowMs - Date.parse(hiderReading.reading_at) > TAG_LOCATION_MAX_AGE_SEC * 1000
   if (stale) {
     return failedAttempt('LOCATION_TOO_OLD', `Both locations must be under ${TAG_LOCATION_MAX_AGE_SEC} s old`)
   }

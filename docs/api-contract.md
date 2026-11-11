@@ -729,3 +729,14 @@ proximity bands, `SPEED_LIMIT_M_PER_S`, `OUT_OF_BOUNDS_*`, `LAST_KNOWN_*`,
 Phase 8 rematch integration: frontend calls the `rematch` Edge Function with
 `{room_id}` so storage cleanup precedes SQL reset. Direct SQL reset while room
 objects remain fails `PHOTOS_NOT_PURGED`; cleanup failure reports `PURGE_FAILED`.
+
+### host_safety — Phase 8 UI support
+
+- **Caller:** authenticated room host only.
+- **Request:** POST `{ "room_id": string }`.
+- **Response:** `{ "players": [{ "id": string, "nickname": string,
+  "status": string, "suspect": boolean, "last_reading_at": string|null,
+  "out_of_area": boolean|null }] }`.
+- **Errors:** `NOT_AUTHENTICATED`, `BAD_REQUEST`, `NOT_HOST`, `DB_ERROR`.
+- **Privacy:** never returns coordinates or precise distances; missing readings
+  yield null age timestamp and null area flag. Host UI polls every 5 seconds.

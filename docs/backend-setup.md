@@ -1584,6 +1584,7 @@ supabase functions deploy finalize_tag
 supabase functions deploy resolve_dispute
 supabase functions deploy finalize_scores
 supabase functions deploy rematch
+supabase functions deploy host_safety
 supabase functions deploy sos
 supabase functions deploy purge_photos
 ```
@@ -1746,3 +1747,21 @@ together, so unexpected policies can broaden access.
 | `tags` | `tags_host_select` | SELECT | `009_tags.sql` |
 | `tags` | `tags_after_round_select` | SELECT | `009_tags.sql` |
 | `public.sos_alerts` | `sos_alerts_host_select` | SELECT | `010_safety.sql` |
+
+
+## 11. Safety UI and full-project SQL
+
+Deploy `host_safety` via CLI. It accepts POST `{room_id}`, authenticates the
+caller, verifies room host, then returns player id/nickname/status/suspect,
+`last_reading_at` and `out_of_area` (nullable). It never returns coordinates or
+precise distances, and uses the actual `locations.reading_at` schema. Polling
+is host-only every five seconds while active. SOS positions remain protected
+by the host-read-only `sos_alerts` policy; the UI does not request coordinates.
+
+The fresh-install script is `supabase/full-project.sql`, generated using
+`scripts/combined-sql.py`. It includes all numbered migrations and fixes in one
+transaction, refuses an existing rooms table, and configures public Realtime
+for rooms/players/events only. Do not execute it on an installed schema. It
+requires Supabase-managed auth/storage schemas and roles and does not replace
+Edge deployment or dashboard/auth/env configuration. The six-phone acceptance
+checklist is `PLAYTEST.md`; live execution is pending.

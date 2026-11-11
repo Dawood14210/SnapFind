@@ -1,3 +1,4 @@
+import SafetyPanel from '@/components/SafetyPanel'
 import TagsPanel from '@/components/TagsPanel'
 import RoundResults from '@/components/RoundResults'
 import { useEffect, useState } from 'react'
@@ -170,7 +171,7 @@ export default function Round() {
     )
   }
 
-  if (!room || error) {
+  if (!room) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-8 text-center">
         <p className="text-lg font-semibold text-slate-900">
@@ -450,6 +451,9 @@ export default function Round() {
         </p>
       </div>
 
+      {error && <div role="alert" className="rounded-xl bg-amber-100 p-4">{error}<button className="min-h-12 px-4 font-bold" onClick={() => void refresh()}>Retry round sync</button></div>}
+      <SafetyPanel roomId={roomId} isHost={isHost} active={active} paused={phase === 'paused'} pausedAt={room.paused_at} reading={location.reading} nowMs={serverNowMs} onRefresh={refresh} />
+      {location.uploadError && <div role="alert" className="rounded-xl bg-amber-100 p-4"><p>{location.uploadError}</p><button className="min-h-12 font-bold underline" onClick={() => void location.retryUpload()}>Retry last location upload</button></div>}
       {(active || phase === 'ended') && <TagsPanel roomId={roomId} userId={user?.id ?? ''} players={players} isHost={isHost} isFinder={isFinder} hunting={phase === 'hunting'} nowMs={serverNowMs} />}
       {phase === 'ended' && <RoundResults roomId={roomId} players={players} isHost={isHost} onLobby={() => navigate(`/room/${room.code}`, { replace: true })} onLeave={() => navigate('/', { replace: true })} />}
       {me?.status === 'tagged' && active && <button className="rounded-xl bg-slate-900 px-4 py-3 font-bold text-white" onClick={() => setFeedOpen(true)}>Watch snapshots</button>}

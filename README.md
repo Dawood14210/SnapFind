@@ -51,3 +51,40 @@ Frontend deploys to Vercel (`npm run build`). `vercel.json` rewrites every path
 to `/index.html`, so client-side routes like `/rules` and `/room/:code` work
 without 404s. See `docs/backend-setup.md` for the deploy steps for migrations
 and Edge Functions.
+
+## One-paste database setup
+
+For a **fresh Supabase project**, paste all of [`supabase/full-project.sql`](supabase/full-project.sql)
+into the SQL Editor and run once. It is one transactional script containing
+migrations 001–010, the ended-room leave fix, the private storage bucket and
+Realtime publication setup. It deliberately refuses an existing `rooms` table;
+it is **not** a destructive reset or an upgrade script. Existing projects must
+apply only missing numbered migrations/fixes. Regenerate with:
+
+```bash
+python3 scripts/combined-sql.py
+```
+
+SQL does **not** deploy Edge Functions, enable anonymous sign-in, configure auth
+URLs, or set environment variables. Follow `docs/backend-setup.md` and deploy
+`host_safety` in addition to its function list. SQL has not been executed against
+a live project in this workspace; smoke-test on staging before production.
+
+## Vercel and mobile deployment
+
+- Framework: Vite. Build: `npm run build`; output: `dist`.
+- Set only `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` in frontend env.
+  Never expose the service role key. Run the actual-key bundle scanner before
+  release. Configure Supabase allowed site/redirect URLs for your deployment.
+- `vercel.json` supports direct room-route refreshes while preserving static
+  manifest, icons and asset URLs. Use HTTPS for GPS, camera and install support.
+- Anonymous sessions persist on the same browser/device; clearing browser storage
+  loses that identity. Do not clear data during a game.
+- Manifest and 192/512px icons support installation where the browser permits it.
+  There is no offline service worker/cache or offline gameplay: network is
+  required for game actions, GPS uploads and SOS delivery.
+- SOS does not call emergency services. Players must agree on emergency contact
+  procedures, a safe play area and daylight-only play. Battery/vibration/audio
+  APIs depend on browser support; sound is off until explicitly enabled.
+- Run the six-phone checklist in `PLAYTEST.md`. Live multi-phone acceptance,
+  production RLS verification and deployed CORS checks are still required.

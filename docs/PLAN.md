@@ -35,7 +35,7 @@ two-phone test checklist and STOP.
 | 7-B tags / scores / rematch backend | done (PR open) |
 | 7-F tags / results frontend | done (this PR) |
 | 8-B safety and checks backend | implemented (this PR); live validation pending |
-| 8-F safety and polish frontend | not started |
+| 8-F safety and polish frontend | implemented (this PR); six-phone test pending |
 
 Done before this session: backend Phase 0 (layout, constants, contract, setup
 docs), Phase 1 (rooms/players/events + RLS + lobby RPCs), Phase 2 (play area,
