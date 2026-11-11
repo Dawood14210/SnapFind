@@ -631,9 +631,10 @@ from the token. Request bodies are JSON. Responses are JSON.
 - **Caller:** any authenticated member.
 - **Request:** `{ "room_id": string, "lat": number, "lng": number }`
 - **Response:** `{ "ok": true, "alert_id": string, "round_paused": true }`
-- **Errors:** `ROOM_NOT_FOUND`, `NOT_IN_ROOM`.
-- **Notes:** inserts an `sos_alerts` row (service key), pauses the round
-  (status `paused`, `paused_at = now()`), writes event `sos`.
+- **Errors:** `ROOM_NOT_FOUND`, `NOT_IN_ROOM`, `ROUND_NOT_ACTIVE`, `BAD_REQUEST`.
+- **Notes:** live hiding/hunting/paused rooms only. Inserts an `sos_alerts` row (service key), pauses the round
+  (status `paused`, preserving an existing `paused_at`), atomically writes
+  event `sos` containing alert/player IDs only, never coordinates.
 
 ### purge_photos — Phase 8
 
@@ -723,4 +724,8 @@ proximity bands, `SPEED_LIMIT_M_PER_S`, `OUT_OF_BOUNDS_*`, `LAST_KNOWN_*`,
 | 5 | tasks + RLS; task_progress, skip_task | in this PR |
 | 6 | ability_uses + RLS; use_ability; getCharges | in this PR |
 | 7 | tags + RLS; request_tag, confirm_tag, dispute_tag, finalize_tag, resolve_dispute, finalize_scores, rematch | in this PR |
-| 8 | sos_alerts + RLS; sos, purge_photos; RLS check script, bots | planned |
+| 8 | sos_alerts + RLS; sos, purge_photos; RLS check script, bots | implemented; live checks pending |
+
+Phase 8 rematch integration: frontend calls the `rematch` Edge Function with
+`{room_id}` so storage cleanup precedes SQL reset. Direct SQL reset while room
+objects remain fails `PHOTOS_NOT_PURGED`; cleanup failure reports `PURGE_FAILED`.

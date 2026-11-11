@@ -13,6 +13,7 @@ import type {
   FinalizeTagResult,
   PurgePhotosResult,
   RequestTagResult,
+  RematchResult,
   ResolveDisputeResult,
   ResolveWindowResult,
   RoundStatusResult,
@@ -84,3 +85,6 @@ export const sos = (roomId: string, lat: number, lng: number) =>
 
 export const purgePhotos = (roomId: string) =>
   edge<PurgePhotosResult>('purge_photos', { room_id: roomId })
+
+export const rematch = (roomId: string) =>
+  edge<RematchResult>('rematch', { room_id: roomId })

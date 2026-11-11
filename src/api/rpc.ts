@@ -19,7 +19,6 @@ import type {
   KickPlayerResult,
   LeaveRoomResult,
   PauseRoundResult,
-  RematchResult,
   ResumeRoundResult,
   SetPlayAreaResult,
   SetRoomSettingsResult,
@@ -95,5 +94,4 @@ export const endRound = (roomId: string) =>
   rpc<EndRoundResult>('end_round', { p_room_id: roomId })
 
 // Phase 7 — rematch
-export const rematch = (roomId: string) =>
-  rpc<RematchResult>('rematch', { p_room_id: roomId })
+// rematch is exported from edge.ts: storage cleanup must precede SQL reset.

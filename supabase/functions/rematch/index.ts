@@ -1,3 +1,5 @@
+import { corsHeaders } from '../lib/http.ts'
+import { purgeRoomPhotos } from '../lib/purge-photos.ts'
 /**
  * rematch — host starts a new round in the same play area (Phase 7).
  *
@@ -16,12 +18,12 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? ''
 
 function jsonError(code: string, message: string, status = 400): Response {
-  return Response.json({ error: { code, message } }, { status })
+  return Response.json({ error: { code, message } }, { status, headers: corsHeaders })
 }
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type, Authorization', 'Access-Control-Allow-Methods': 'POST, OPTIONS' } })
+    return new Response('ok', { headers: corsHeaders })
   }
   if (req.method !== 'POST') return jsonError('METHOD_NOT_ALLOWED', 'Use POST', 405)
 
@@ -56,6 +58,9 @@ Deno.serve(async (req) => {
   if (room.host_id !== caller) return jsonError('NOT_HOST', 'Only the host can rematch')
   if (room.status !== 'ended') return jsonError('ROUND_NOT_ENDED', 'The round has not ended yet')
 
+  try { await purgeRoomPhotos(service, roomId) }
+  catch { return jsonError('PURGE_FAILED', 'Photo cleanup failed; retry before rematching', 500) }
+
   // 2. The RPC wipes the round data, resets players, and picks the next
   //    finder (top-scoring hider).
   const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -70,5 +75,5 @@ Deno.serve(async (req) => {
     if (code) return jsonError(code, rematchError.message, 400)
     return jsonError('DB_ERROR', rematchError.message, 500)
   }
-  return Response.json({ ok: true, finder_id: result?.finder_id ?? null })
+  return Response.json({ ok: true, finder_id: result?.finder_id ?? null }, { headers: corsHeaders })
 })
