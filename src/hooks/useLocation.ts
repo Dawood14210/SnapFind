@@ -19,6 +19,8 @@ export interface LocationState {
   requestPermission: () => void
   /** Dev tool (?fake=1): set the position from a map tap instead of GPS. */
   setFake: (latlng: { lat: number; lng: number }) => void
+  uploadError: string | null
+  retryUpload: () => Promise<void>
   fakeMode: boolean
 }
 
@@ -44,6 +46,7 @@ interface UseLocationOptions {
  */
 export function useLocation(options: UseLocationOptions): LocationState {
   const { roomId, active, userId } = options
+  const [uploadError, setUploadError] = useState<string | null>(null)
   const [permission, setPermission] = useState<LocationPermission>('unknown')
   const [reading, setReading] = useState<LocationReading | null>(null)
   const watchId = useRef<number | null>(null)
@@ -60,6 +63,7 @@ export function useLocation(options: UseLocationOptions): LocationState {
       const now = Date.now()
       if (!immediate && now - lastUpsertMs.current < UPSERT_INTERVAL_MS) return
       lastUpsertMs.current = now
+      try {
       const supabase = getSupabase()
       const { error } = await supabase.from('locations').insert({
         room_id: roomId,
@@ -69,7 +73,8 @@ export function useLocation(options: UseLocationOptions): LocationState {
         accuracy_m: r.accuracyM,
         reading_at: new Date(r.atMs).toISOString(),
       })
-      if (error) console.error('location upsert failed', error)
+      setUploadError(error ? 'Location upload failed. Retry when connected.' : null)
+      } catch { setUploadError('Location upload failed. Retry when connected.') }
     },
     [roomId, userId, active],
   )
@@ -96,7 +101,7 @@ export function useLocation(options: UseLocationOptions): LocationState {
     if (!active || !roomId) return
 
     watchId.current = navigator.geolocation.watchPosition(
-      (pos) => applyReading(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy ?? 0, Date.now()),
+      (pos) => applyReading(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy ?? Infinity, pos.timestamp),
       (err) => setPermission(err.code === err.PERMISSION_DENIED ? 'denied' : 'unknown'),
       { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 },
     )
@@ -115,7 +120,7 @@ export function useLocation(options: UseLocationOptions): LocationState {
     }
     navigator.geolocation.getCurrentPosition(
       (pos) =>
-        applyReading(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy ?? 0, Date.now()),
+        applyReading(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy ?? Infinity, pos.timestamp),
       (err) => setPermission(err.code === err.PERMISSION_DENIED ? 'denied' : 'unknown'),
       { enableHighAccuracy: true, timeout: 20000 },
     )
@@ -134,5 +139,5 @@ export function useLocation(options: UseLocationOptions): LocationState {
     reading !== null &&
     reading.accuracyM <= READY_ACCURACY_M
 
-  return { permission, reading, ready, requestPermission, setFake, fakeMode }
+  return { permission, reading, ready, requestPermission, setFake, fakeMode, uploadError, retryUpload: async () => { if (reading) await upsert(reading, true) } }
 }

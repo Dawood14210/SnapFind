@@ -54,7 +54,7 @@ Deno.serve(async (req) => {
 
   const { data: room } = await service.from('rooms').select('status').eq('id', roomId).maybeSingle()
   if (!room) return jsonError('ROOM_NOT_FOUND', 'Room not found', 404)
-  if (room.status !== 'hunt') return jsonError('ROUND_NOT_HUNTING', 'Not currently hunting')
+  if (room.status !== 'hunting') return jsonError('ROUND_NOT_HUNTING', 'Not currently hunting')
 
   // 2. The tag must belong to this room, be pending, and target this hider.
   const { data: tagRows, error: tagError } = await service
