@@ -88,3 +88,14 @@ a live project in this workspace; smoke-test on staging before production.
   APIs depend on browser support; sound is off until explicitly enabled.
 - Run the six-phone checklist in `PLAYTEST.md`. Live multi-phone acceptance,
   production RLS verification and deployed CORS checks are still required.
+
+### Existing database with rooms/locations/snapshots but no tasks/abilities/tags/SOS
+
+Use [`supabase/upgrade-from-006.sql`](supabase/upgrade-from-006.sql), not the
+fresh-project setup. Back up first, then run the entire file once in Supabase
+SQL Editor. It checks earlier tables/columns, applies migrations 007–010 and
+the ended-room leave fix in a transaction, and preserves existing data. It
+refuses partial/already-installed target tables. A failed prerequisite check
+requires inspecting the earlier schema, not deleting the guard. Regenerate
+with `python3 scripts/upgrade-from-006.py`. Not live-database validated here.
+Deploy the corresponding Edge Functions separately per backend-setup.md.
