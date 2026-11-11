@@ -116,8 +116,5 @@ describe('rpc parameter names', () => {
     expect(rpcCalls).toEqual([{ name: 'end_round', params: { p_room_id: 'room-1' } }])
   })
 
-  it('rematch sends p_room_id', async () => {
-    await api.rematch('room-1')
-    expect(rpcCalls).toEqual([{ name: 'rematch', params: { p_room_id: 'room-1' } }])
-  })
+
 })

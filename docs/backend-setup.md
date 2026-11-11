@@ -1447,6 +1447,117 @@ end;
 $$;
 ```
 
+## 5k. Phase 8 safety SQL
+
+Run after `009_tags.sql`. This creates host-only SOS alerts and an atomic
+service-only helper that records the alert and pauses the round. Repeated
+alerts preserve the pause clock; lobby/ended requests fail `ROUND_NOT_ACTIVE`.
+The replacement rematch RPC rejects reset while photos remain in storage.
+
+```sql
+-- Phase 8: private SOS positions and atomic pause.
+create table public.sos_alerts (
+  id uuid primary key default gen_random_uuid(),
+  room_id uuid not null references public.rooms(id) on delete cascade,
+  player_id uuid not null references auth.users(id) on delete cascade,
+  lat double precision not null check (lat between -90 and 90),
+  lng double precision not null check (lng between -180 and 180),
+  created_at timestamptz not null default now()
+);
+create index sos_alerts_room_created_idx on public.sos_alerts(room_id, created_at desc);
+alter table public.sos_alerts enable row level security;
+create policy sos_alerts_host_select on public.sos_alerts for select to authenticated
+  using (exists (select 1 from public.rooms r where r.id = sos_alerts.room_id and r.host_id = auth.uid()));
+
+create or replace function public.record_sos(p_room_id uuid, p_player_id uuid, p_lat double precision, p_lng double precision)
+returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
+declare v_room public.rooms; v_id uuid;
+begin
+  select * into v_room from public.rooms where id = p_room_id for update;
+  if not found then raise exception 'ROOM_NOT_FOUND'; end if;
+  if not exists (select 1 from public.players where room_id = p_room_id and id = p_player_id) then raise exception 'NOT_IN_ROOM'; end if;
+  if v_room.status not in ('hiding','hunting','paused') then raise exception 'ROUND_NOT_ACTIVE'; end if;
+  insert into public.sos_alerts(room_id,player_id,lat,lng) values(p_room_id,p_player_id,p_lat,p_lng) returning id into v_id;
+  -- Repeated alerts must not restart the pause clock.
+  if v_room.status <> 'paused' then
+    update public.rooms set status='paused', paused_at=clock_timestamp() where id=p_room_id;
+  end if;
+  -- Events are member-readable: coordinates must NEVER go here.
+  insert into public.events(room_id,type,payload) values(p_room_id,'sos',jsonb_build_object('alert_id',v_id,'player_id',p_player_id));
+  return jsonb_build_object('ok',true,'alert_id',v_id,'round_paused',true);
+end; $$;
+revoke all on function public.record_sos(uuid,uuid,double precision,double precision) from public, anon, authenticated;
+grant execute on function public.record_sos(uuid,uuid,double precision,double precision) to service_role;
+
+-- Guard the SQL reset and remove old safety alerts.
+create or replace function rematch(p_room_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_room          rooms;
+  v_next_finder   uuid;
+begin
+  if not exists (select 1 from rooms where id = p_room_id and host_id = auth.uid()) then
+    raise exception 'NOT_HOST';
+  end if;
+  select * into v_room from rooms where id = p_room_id;
+  if not found then
+    raise exception 'ROOM_NOT_FOUND';
+  end if;
+  if v_room.status <> 'ended' then
+    raise exception 'ROUND_NOT_ENDED';
+  end if;
+
+  -- Direct RPC callers must not bypass storage cleanup.
+  if exists (select 1 from storage.objects where bucket_id='snapshots'
+    and name like p_room_id::text || '/%') then
+    raise exception 'PHOTOS_NOT_PURGED';
+  end if;
+
+  -- Next finder: top-scoring hider (ties broken by nickname for determinism).
+  select id into v_next_finder from players
+  where room_id = p_room_id and role = 'hider'
+  order by points desc, nickname asc
+  limit 1;
+
+  -- Wipe round data.
+  delete from sos_alerts where room_id = p_room_id;
+  delete from snapshots where room_id = p_room_id;
+  delete from tasks where room_id = p_room_id;
+  delete from ability_uses where room_id = p_room_id;
+  delete from tags where room_id = p_room_id;
+  delete from reveals where room_id = p_room_id;
+  delete from events where room_id = p_room_id;
+  delete from locations where room_id = p_room_id;
+
+  -- Reset players for the next round.
+  update players set
+    points      = 0,
+    ready       = false,
+    status      = 'active',
+    role        = null,
+    suspect     = false,
+    skips_used  = 0
+  where room_id = p_room_id;
+
+  -- Lobby: keep the play area and room settings, reset the round clock.
+  update rooms set
+    status           = 'lobby',
+    scores_finalized = false,
+    finder_id        = null,
+    started_at       = null,
+    paused_at        = null,
+    paused_total_ms  = 0
+  where id = p_room_id;
+
+  return jsonb_build_object('ok', true, 'finder_id', v_next_finder);
+end;
+$$;
+```
+
 ## 6. Add the Edge Functions
 
 Edge Functions live in `/supabase/functions/*.ts`. Add each one in the dashboard
@@ -1473,6 +1584,8 @@ supabase functions deploy finalize_tag
 supabase functions deploy resolve_dispute
 supabase functions deploy finalize_scores
 supabase functions deploy rematch
+supabase functions deploy sos
+supabase functions deploy purge_photos
 ```
 
 | Function | Phase | File | Required env |
@@ -1513,10 +1626,11 @@ hider and a test finder and attempting forbidden reads.
 | snapshots | 4 | finder/tagged read all; hider own; own insert; service-key update/delete |
 | tasks | 5 | **own row read** |
 | ability_uses | 6 | **finder select** |
-| tags | 7 | members select; service-key write |
+| tags | 7 | finder own, hider own, host all, members after end; service-key write |
 | sos_alerts | 8 | **host select** |
 
-All policies use the `is_room_member()` helper (SECURITY DEFINER). There are
+Room membership policies use `is_room_member()` (SECURITY DEFINER);
+private-data policies also use owner, role or host predicates. There are
 **no direct client write policies** on rooms, players or events — every write
 goes through an RPC or server-side code with the service role key.
 
@@ -1539,6 +1653,96 @@ exist in Supabase Edge Function env vars and the gitignored `scripts/.env`.
    (`supabase functions deploy round_status`) because it imports local files.
 3. Create the `snapshots` bucket (private) in production.
 4. Enable anonymous sign-in in production.
-5. Run `scripts/rls-check.ts` against production with a throwaway test account and
-   confirm every line prints PASS.
+5. Run `scripts/rls-check.ts` against a separate staging project with identical
+   policies; confirm every line prints PASS. Audit production using SQL.
 6. Merge the frontend to Vercel; verify the service key is not in the bundle.
+
+
+## 10. Phase 8 validation and deployment
+
+Use a dedicated disposable test project for the fixture and bot scripts. Copy
+`scripts/.env.example` to gitignored `scripts/.env`, configure keys locally,
+and set `CONFIRM_TEST_PROJECT=yes`. Never use a `VITE_` name for the service
+key, commit it, print it, or paste it into chat.
+
+```bash
+npm ci
+npm --prefix scripts ci
+npm run typecheck
+npm run typecheck:functions
+npm --prefix scripts run typecheck
+npm test
+npm run build
+npm --prefix scripts run check-bundle
+npm --prefix scripts run rls-check
+# Set BOT_ROOM_ID and BOT_CENTER_LAT/LNG for a disposable room first:
+npm --prefix scripts run bots
+```
+
+- Bundle scanner checks every built file for the configured service key and
+  service-role markers. It fails without a build or key and never prints the
+  key. A marker-only scan is NOT a configured-key check.
+- RLS script creates four disposable anonymous identities and populated test
+  fixtures. Only user-session anon-key clients perform read checks. Positive
+  controls prevent empty/missing fixtures from falsely passing. Read errors,
+  forbidden rows, failed positive controls and cleanup failures fail the run.
+- Run `scripts/rls-audit.sql` in SQL Editor to verify RLS on all ten application
+  tables, inspect installed policies (including unexpected permissive policies),
+  and verify the service-only SOS helper execute grants.
+- Bots create eight real anonymous hiders in an explicit disposable room,
+  insert random-walk readings using `locations.reading_at`, and upload valid
+  sample PNGs with snapshot metadata. Default 12 ticks, five seconds apart;
+  `BOT_TICKS` allows 1–720. Normal completion/error cleans up its users and
+  uploads; a hard-killed process may require manual cleanup.
+
+### Deploy checklist
+
+1. Apply migrations 001–010 and applicable fixes in order; audit installed RLS.
+2. Deploy the full §6 list via CLI, including updated `rematch`, `sos`, and
+   `purge_photos`; keep snapshots private. Shared local imports require CLI.
+3. Enable anonymous sign-in and Realtime for rooms, players and events.
+4. Run fixture checks in a separate staging project with production-equivalent
+   policies. Do not run bots or disposable fixture tools in production.
+5. Build, scan using the actual configured service key, then publish with only
+   frontend URL/anon-key environment values.
+6. SOS smoke test: during hiding/hunting submit an alert; host alone reads its
+   coordinates. Members see identifiers only in the event. Submit a second
+   alert while paused and verify paused_at is unchanged; verify host resume.
+7. End a test round. Upload nested and orphan photos, purge twice (second count
+   zero), rematch, and confirm alerts are removed. Simulate storage failure:
+   reset must not proceed. Non-host purge/rematch must fail.
+
+Storage deletion and SQL reset cannot share a transaction. Metadata deletion
+happens only after storage deletion succeeds. If reset fails after cleanup,
+retry rematch; cleanup is retryable. The SQL guard blocks direct reset calls
+while objects remain under the room prefix. Do not modify room storage during
+cleanup. SQL and live tests were not executed in the coding workspace.
+
+### Shipped policy inventory
+
+Compare this inventory with `rls-audit.sql` results; permissive policies OR
+together, so unexpected policies can broaden access.
+
+| Table | Policy | Operation | Migration |
+|---|---|---|---|
+| `rooms` | `rooms_members_select` | SELECT | `001_lobby.sql` |
+| `players` | `players_members_select` | SELECT | `001_lobby.sql` |
+| `events` | `events_members_select` | SELECT | `001_lobby.sql` |
+| `locations` | `locations_own_select` | SELECT | `005_location.sql` |
+| `locations` | `locations_own_insert` | INSERT | `005_location.sql` |
+| `locations` | `locations_own_update` | UPDATE | `005_location.sql` |
+| `locations` | `locations_own_delete` | DELETE | `005_location.sql` |
+| `reveals` | `reveals_finder_select` | SELECT | `005_location.sql` |
+| `snapshots` | `snapshots_own_select` | SELECT | `006_snapshots.sql` |
+| `snapshots` | `snapshots_finder_select` | SELECT | `006_snapshots.sql` |
+| `snapshots` | `snapshots_tagged_select` | SELECT | `006_snapshots.sql` |
+| `snapshots` | `snapshots_ended_select` | SELECT | `006_snapshots.sql` |
+| `snapshots` | `snapshots_own_insert` | INSERT | `006_snapshots.sql` |
+| `storage.objects` | `snapshots_bucket_own_insert` | INSERT | `006_snapshots.sql` |
+| `tasks` | `tasks_own_select` | SELECT | `007_tasks.sql` |
+| `ability_uses` | `ability_uses_finder_select` | SELECT | `008_abilities.sql` |
+| `tags` | `tags_finder_select` | SELECT | `009_tags.sql` |
+| `tags` | `tags_hider_select` | SELECT | `009_tags.sql` |
+| `tags` | `tags_host_select` | SELECT | `009_tags.sql` |
+| `tags` | `tags_after_round_select` | SELECT | `009_tags.sql` |
+| `public.sos_alerts` | `sos_alerts_host_select` | SELECT | `010_safety.sql` |
