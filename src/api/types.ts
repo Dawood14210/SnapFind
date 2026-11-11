@@ -255,7 +255,7 @@ export interface UseAbilityResult {
 // Edge: tags and scores
 // ---------------------------------------------------------------------------
 
-export type TagStatus = 'pending' | 'confirmed' | 'disputed'
+export type TagStatus = 'pending' | 'confirmed' | 'disputed' | 'denied'
 
 export interface TagView {
   id: string

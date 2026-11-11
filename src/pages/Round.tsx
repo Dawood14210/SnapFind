@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import TagsPanel from '@/components/TagsPanel'
+import RoundResults from '@/components/RoundResults'
+import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { endRound, pauseRound, resumeRound } from '@/api'
 import { friendlyError } from '@/lib/friendlyError'
@@ -69,7 +71,7 @@ export default function Round() {
   const snapshots = useSnapshots({
     roomId,
     roundSeconds: display?.round_seconds ?? 0,
-    role: me?.role ?? null,
+    role: me?.status === 'tagged' ? null : me?.role ?? null,
     hunting: phase === 'hunting',
   })
   const [captureOpen, setCaptureOpen] = useState(false)
@@ -87,7 +89,7 @@ export default function Round() {
   // assigns, completes and scores them).
   const tasks = useTasks({
     roomId,
-    enabled: me?.role === 'hider' && phase === 'hunting',
+    enabled: me?.role === 'hider' && me.status === 'active' && phase === 'hunting',
   })
   const currentTask = tasks.currentTask
   const [photoCaptureTask, setPhotoCaptureTask] = useState<TaskView | null>(null)
@@ -106,7 +108,7 @@ export default function Round() {
 
   useAbilityAlerts({
     roomId,
-    enabled: me?.role === 'hider' && phase === 'hunting',
+    enabled: me?.role === 'hider' && me.status === 'active' && phase === 'hunting',
     onAlert: (kind: AbilityKind) => {
       setAbilityToast(`The finder used ${ABILITY_LABELS[kind]}`)
       if ('vibrate' in navigator) navigator.vibrate(200)
@@ -155,6 +157,10 @@ export default function Round() {
     const id = setTimeout(() => setAbilityToast(null), 3000)
     return () => clearTimeout(id)
   }, [abilityToast])
+
+  useEffect(() => {
+    if (room?.status === 'lobby') navigate(`/room/${code}`, { replace: true })
+  }, [room?.status, code, navigate])
 
   if (lobbyLoading || roundLoading) {
     return (
@@ -205,9 +211,7 @@ export default function Round() {
   // Reveals for the finder's map: pulse = amber, zone_scan = teal, clue =
   // violet, red = penalty reveals (last_known / out_of_bounds). The popup
   // uses the server label plus the expiry.
-  const finderRevealDots = useMemo(
-    () =>
-      reveals.map((r) => ({
+  const finderRevealDots = reveals.map((r) => ({
         id: r.id,
         latlng: [r.lat, r.lng] as [number, number],
         radiusM: r.radius_m ?? 40,
@@ -220,18 +224,12 @@ export default function Round() {
                 ? '#7c3aed'
                 : '#dc2626',
         label: `${r.label} — until ${new Date(r.expires_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
-      })),
-    [reveals],
-  )
+      }))
 
   // Clue cards for the abilities panel: the live clue reveals.
-  const clueCards = useMemo(
-    () =>
-      reveals
+  const clueCards = reveals
         .filter((r) => r.kind === 'clue')
-        .map((r) => ({ id: r.id, label: r.label, expiresAtMs: Date.parse(r.expires_at) })),
-    [reveals],
-  )
+        .map((r) => ({ id: r.id, label: r.label, expiresAtMs: Date.parse(r.expires_at) }))
 
   // Fire an ability (throws with the server error — shown as a toast).
   const fireAbility = async (kind: AbilityKind) => {
@@ -245,7 +243,7 @@ export default function Round() {
 
   // Task target circle on the hider's own map (Phase 5): the reach_zone
   // circle, or the play-area circle the hider must get outside of.
-  const taskTarget = useMemo(() => {
+  const taskTarget = (() => {
     const t = currentTask
     if (!t) return null
     const lat = numParam(t.params, 'lat')
@@ -268,7 +266,7 @@ export default function Round() {
       }
     }
     return null
-  }, [currentTask])
+  })()
 
   // Dev tool (?dev=1): complete the current task. Teleports the fake
   // position onto the target (reach_zone / distance) so the next server
@@ -357,7 +355,7 @@ export default function Round() {
         />
       )}
 
-      {me?.role === 'hider' && phase === 'hunting' && (
+      {me?.role === 'hider' && me.status === 'active' && phase === 'hunting' && (
         <div className="rounded-2xl bg-white p-4 shadow">
           <p className="text-sm font-bold uppercase tracking-wide text-slate-500">Snapshots</p>
           <p className="mt-1 text-base font-semibold text-slate-900">
@@ -451,6 +449,10 @@ export default function Round() {
           {phase === 'lobby' && 'Waiting to start'}
         </p>
       </div>
+
+      {(active || phase === 'ended') && <TagsPanel roomId={roomId} userId={user?.id ?? ''} players={players} isHost={isHost} isFinder={isFinder} hunting={phase === 'hunting'} nowMs={serverNowMs} />}
+      {phase === 'ended' && <RoundResults roomId={roomId} players={players} isHost={isHost} onLobby={() => navigate(`/room/${room.code}`, { replace: true })} onLeave={() => navigate('/', { replace: true })} />}
+      {me?.status === 'tagged' && active && <button className="rounded-xl bg-slate-900 px-4 py-3 font-bold text-white" onClick={() => setFeedOpen(true)}>Watch snapshots</button>}
 
       {showRing && <ProximityRing band={myBand} />}
 
@@ -563,17 +565,6 @@ export default function Round() {
             className="w-full rounded-xl bg-white py-3 text-base font-semibold text-red-600 shadow active:scale-95"
           >
             End round
-          </button>
-        </div>
-      )}
-
-      {phase === 'ended' && (
-        <div className="flex flex-col gap-3">
-          <button
-            onClick={() => navigate(`/room/${room.code}`, { replace: true })}
-            className="w-full rounded-xl bg-slate-900 py-3 text-base font-bold text-white shadow active:scale-95"
-          >
-            Back to lobby
           </button>
         </div>
       )}
